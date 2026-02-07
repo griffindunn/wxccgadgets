@@ -1,10 +1,10 @@
 // ---------------------------------------------------------
-// VERSION 9.0 - EXPLICIT INIT CONFIG
+// VERSION 10.0 - JSPM CDN (Preserves Static Properties)
 // ---------------------------------------------------------
-console.log("GADGET: Loading Version 9.0 (Explicit Config)...");
+console.log("GADGET: Loading Version 10.0 (JSPM)...");
 
-// Use the robust ESM CDN
-const SDK_URL = "https://esm.sh/@wxcc-desktop/sdk";
+// JSPM handles the conversion of the Webex SDK better than esm.sh
+const SDK_URL = "https://jspm.dev/@wxcc-desktop/sdk"; 
 const API_BASE_URL = "https://api.wxcc-us1.cisco.com"; 
 
 class SupervisorGlobalVars extends HTMLElement {
@@ -19,28 +19,50 @@ class SupervisorGlobalVars extends HTMLElement {
         this.renderLoading();
         
         try {
-            console.log("GADGET: 1. Importing SDK...");
-            const { Desktop } = await import(SDK_URL);
+            console.log("GADGET: 1. Importing SDK from JSPM...");
+            const module = await import(SDK_URL);
 
-            if (!Desktop) throw new Error("SDK loaded, but 'Desktop' export is missing.");
-            this.desktop = Desktop;
+            // JSPM usually puts the main export in 'default'
+            // We check both default and named export to be safe
+            this.desktop = module.Desktop || module.default?.Desktop || module.default;
 
-            // *** CRITICAL FIX: GET WIDGET NAME ***
-            // We try to find the name passed from the loader, or default to "SupervisorControls"
+            if (!this.desktop) {
+                console.error("GADGET DUMP:", module);
+                throw new Error("SDK loaded, but 'Desktop' object could not be found.");
+            }
+
+            console.log("GADGET: SDK Object Found. Keys:", Object.keys(this.desktop));
+
+            // *** CRITICAL CHECK ***
+            // If identity is missing, the SDK is broken in this environment
+            if (!this.desktop.identity) {
+                console.warn("GADGET: 'identity' property missing. Checking fallback...");
+                // Sometimes it's nested in a 'default' property inside the class
+                if (this.desktop.default && this.desktop.default.identity) {
+                    this.desktop = this.desktop.default;
+                }
+            }
+
+            // Init Config
             const widgetName = this.getAttribute("gadget-name") || "SupervisorControls";
-            console.log(`GADGET: Initializing SDK for widget: ${widgetName}`);
-
-            // *** PASS CONFIG TO INIT ***
-            // This prevents the "undefined (reading 'widgetName')" error
+            console.log(`GADGET: Initializing for ${widgetName}...`);
+            
             await this.desktop.config.init({
                 widgetName: widgetName,
-                widgetId: widgetName 
+                widgetId: widgetName
             });
             
-            console.log("GADGET: SDK Initialized! Getting Token...");
-            const token = await this.desktop.identity.getAccessToken();
+            console.log("GADGET: Config Init Success.");
+
+            // Get Token
+            // If this fails, we catch it below
+            console.log("GADGET: Requesting Access Token...");
+            if (!this.desktop.identity) throw new Error("Desktop.identity is undefined. Cannot get token.");
             
-            console.log("GADGET: Fetching Variables...");
+            const token = await this.desktop.identity.getAccessToken();
+            console.log("GADGET: Token received!");
+
+            // Fetch Data
             await this.fetchVariables(token);
 
         } catch (error) {
@@ -74,7 +96,7 @@ class SupervisorGlobalVars extends HTMLElement {
         this.shadowRoot.innerHTML = `
             <div style="padding:20px; font-family:sans-serif;">
                 <h3>Loading...</h3>
-                <p>Initializing Webex SDK (v9.0)...</p>
+                <p>Connecting to Webex (v10.0)...</p>
             </div>`;
     }
 
@@ -89,8 +111,6 @@ class SupervisorGlobalVars extends HTMLElement {
 
     render() {
         const cssLink = `<link rel="stylesheet" href="https://griffindunn.github.io/wxccgadgets/styles/main.css">`;
-        
-        // Render simple list for now to prove it works
         const rows = this.variables.map(v => 
             `<li><strong>${v.name}</strong>: ${v.value}</li>`
         ).join('');
@@ -103,21 +123,18 @@ class SupervisorGlobalVars extends HTMLElement {
     }
 }
 
-// Register Components
 if (!customElements.get("supervisor-global-vars")) {
     customElements.define("supervisor-global-vars", SupervisorGlobalVars);
 }
 
 class WxccGadgetLoader extends HTMLElement {
     constructor() { super(); this.attachShadow({ mode: 'open' }); }
-    
     connectedCallback() {
         const gadgetName = this.getAttribute('gadget-name');
         if (gadgetName) {
             const el = document.createElement(gadgetName);
-            // Pass all attributes down to the child so it can read them
             Array.from(this.attributes).forEach(attr => {
-                el.setAttribute(attr.name, attr.value);
+                if (attr.name !== 'gadget-name') el.setAttribute(attr.name, attr.value);
             });
             this.shadowRoot.appendChild(el);
         }
