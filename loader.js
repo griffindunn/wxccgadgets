@@ -1,10 +1,10 @@
 // ---------------------------------------------------------
-// VERSION 10.0 - JSPM CDN (Preserves Static Properties)
+// VERSION 11.0 - SCRIPT INJECTION (UNKPG)
 // ---------------------------------------------------------
-console.log("GADGET: Loading Version 10.0 (JSPM)...");
+console.log("GADGET: Loading Version 11.0 (Script Injection)...");
 
-// JSPM handles the conversion of the Webex SDK better than esm.sh
-const SDK_URL = "https://jspm.dev/@wxcc-desktop/sdk"; 
+// UNPKG usually serves the full "Umd" build which includes everything
+const SDK_URL = "https://unpkg.com/@wxcc-desktop/sdk@latest/dist/index.js";
 const API_BASE_URL = "https://api.wxcc-us1.cisco.com"; 
 
 class SupervisorGlobalVars extends HTMLElement {
@@ -19,56 +19,73 @@ class SupervisorGlobalVars extends HTMLElement {
         this.renderLoading();
         
         try {
-            console.log("GADGET: 1. Importing SDK from JSPM...");
-            const module = await import(SDK_URL);
-
-            // JSPM usually puts the main export in 'default'
-            // We check both default and named export to be safe
-            this.desktop = module.Desktop || module.default?.Desktop || module.default;
-
-            if (!this.desktop) {
-                console.error("GADGET DUMP:", module);
-                throw new Error("SDK loaded, but 'Desktop' object could not be found.");
+            // 1. Inject the Script Tag
+            console.log("GADGET: Injecting SDK Script...");
+            await this.loadScript(SDK_URL);
+            
+            // 2. Find the Global Object
+            console.log("GADGET: Script loaded. Searching for global 'Desktop'...");
+            
+            // We verify exactly where the SDK attached itself
+            if (window.Desktop) {
+                this.desktop = window.Desktop;
+                console.log("GADGET: Found 'window.Desktop'");
+            } 
+            else if (window.wxcc && window.wxcc.Desktop) {
+                this.desktop = window.wxcc.Desktop;
+                console.log("GADGET: Found 'window.wxcc.Desktop'");
+            }
+            else {
+                // Debugging: Print all keys on window that start with 'Des' or 'wx'
+                const keys = Object.keys(window).filter(k => k.startsWith('Des') || k.startsWith('wx'));
+                console.error("GADGET: Window keys found:", keys);
+                throw new Error("SDK script finished loading, but 'Desktop' global is missing.");
             }
 
-            console.log("GADGET: SDK Object Found. Keys:", Object.keys(this.desktop));
-
-            // *** CRITICAL CHECK ***
-            // If identity is missing, the SDK is broken in this environment
-            if (!this.desktop.identity) {
-                console.warn("GADGET: 'identity' property missing. Checking fallback...");
-                // Sometimes it's nested in a 'default' property inside the class
-                if (this.desktop.default && this.desktop.default.identity) {
-                    this.desktop = this.desktop.default;
-                }
-            }
-
-            // Init Config
+            // 3. Initialize
             const widgetName = this.getAttribute("gadget-name") || "SupervisorControls";
-            console.log(`GADGET: Initializing for ${widgetName}...`);
+            console.log(`GADGET: Initializing SDK for ${widgetName}...`);
             
             await this.desktop.config.init({
                 widgetName: widgetName,
                 widgetId: widgetName
             });
-            
-            console.log("GADGET: Config Init Success.");
 
-            // Get Token
-            // If this fails, we catch it below
-            console.log("GADGET: Requesting Access Token...");
-            if (!this.desktop.identity) throw new Error("Desktop.identity is undefined. Cannot get token.");
-            
+            // 4. Get Token
+            console.log("GADGET: Getting Access Token...");
+            // Double check identity exists before calling it
+            if (!this.desktop.identity) {
+                console.error("GADGET: Desktop object structure:", this.desktop);
+                throw new Error("Desktop.identity is undefined. The SDK might be incomplete.");
+            }
+
             const token = await this.desktop.identity.getAccessToken();
-            console.log("GADGET: Token received!");
+            console.log("GADGET: Token Received!");
 
-            // Fetch Data
+            // 5. Fetch Data
             await this.fetchVariables(token);
 
         } catch (error) {
             console.error("GADGET CRITICAL ERROR:", error);
             this.renderError(error.message);
         }
+    }
+
+    // Helper to load external scripts safely
+    loadScript(url) {
+        return new Promise((resolve, reject) => {
+            // If it's already loaded, don't load it again
+            if (window.Desktop) return resolve();
+
+            const script = document.createElement('script');
+            script.src = url;
+            script.onload = () => {
+                // Small delay to ensure the global variable is set
+                setTimeout(resolve, 500);
+            };
+            script.onerror = () => reject(new Error("Network Error: Could not load SDK script."));
+            document.head.appendChild(script);
+        });
     }
 
     async fetchVariables(token) {
@@ -96,7 +113,7 @@ class SupervisorGlobalVars extends HTMLElement {
         this.shadowRoot.innerHTML = `
             <div style="padding:20px; font-family:sans-serif;">
                 <h3>Loading...</h3>
-                <p>Connecting to Webex (v10.0)...</p>
+                <p>Injecting Webex SDK (v11.0)...</p>
             </div>`;
     }
 
