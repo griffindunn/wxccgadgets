@@ -1,3 +1,5 @@
+import "./supervisor-global-vars.js";
+
 class WxccGadgetLoader extends HTMLElement {
     constructor() {
         super();
