@@ -11,62 +11,74 @@ export class SupervisorGlobalVars extends HTMLElement {
     // 1. Initialize the WxCC Desktop SDK
     try {
       await this.desktop.config.init();
-      console.log("Supervisor Gadget: SDK Initialized");
+      console.log("Supervisor Gadget: SDK Initialized successfully");
     } catch (error) {
       console.error("Supervisor Gadget: SDK Init Failed", error);
     }
 
     // 2. Render the UI
     this.render();
+
+    // 3. Add Event Listeners
+    // Example: Bind the 'Update' button to a function
+    const updateBtn = this.shadowRoot.getElementById("update-btn");
+    if (updateBtn) {
+        updateBtn.addEventListener("click", () => this.handleUpdate());
+    }
+  }
+
+  /**
+   * Example function to handle button clicks
+   */
+  async handleUpdate() {
+    const inputVal = this.shadowRoot.getElementById("var-input").value;
+    console.log(`Update requested for value: ${inputVal}`);
     
-    // 3. Add Event Listeners (if needed)
-    // this.shadowRoot.querySelector('#myButton').addEventListener('click', ...)
+    // TODO: Add your specific SDK call here, e.g.:
+    // await this.desktop.rest.post("/some/api", { value: inputVal });
+    
+    alert(`Value submitted: ${inputVal}`);
   }
 
   render() {
-    // Basic styling to match Momentum Design (Webex look and feel)
-    const style = `
-      <style>
-        :host {
-          display: block;
-          font-family: "CiscoSans", sans-serif; /* Standard Webex Font */
-          padding: 1rem;
-          background-color: var(--md-background-color, #fff);
-          color: var(--md-primary-text-color, #222);
-        }
-        .container {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
-        h2 {
-          font-size: 1.2rem;
-          margin: 0 0 10px 0;
-        }
-        .status-box {
-          padding: 10px;
-          border: 1px solid #e0e0e0;
-          border-radius: 4px;
-        }
-      </style>
-    `;
+    // 1. Get properties passed from JSON (like "title")
+    // If the attribute isn't found, default to "Global Variables"
+    const title = this.getAttribute("title") || "Global Variables";
 
-    // The HTML content
+    // 2. Link to your external CSS (main.css)
+    // Note: ensure this URL matches where your CSS file is hosted
+    const cssLink = `<link rel="stylesheet" href="https://griffindunn.github.io/wxccgadgets/main.css">`;
+
+    // 3. Define the HTML structure
     const html = `
-      <div class="container">
-        <h2>Global Variables</h2>
-        <div class="status-box">
-          <p><strong>Status:</strong> Component Loaded</p>
-          <p><strong>SDK Active:</strong> Yes</p>
+      <div class="gadget-wrapper">
+        <header>
+            <h3>${title}</h3>
+        </header>
+        
+        <div class="content">
+            <div class="form-group">
+                <label for="var-input">Variable Name</label>
+                <input type="text" id="var-input" placeholder="Enter value here..." />
+            </div>
+
+            <div class="actions">
+                <button id="update-btn" class="md-button md-button--blue">Update Variable</button>
+            </div>
+            
+            <div class="status-footer">
+                <small>SDK Status: Active</small>
+            </div>
         </div>
-        </div>
+      </div>
     `;
 
-    this.shadowRoot.innerHTML = `${style}${html}`;
+    // 4. Inject into Shadow DOM
+    this.shadowRoot.innerHTML = `${cssLink}${html}`;
   }
 }
 
-// Register the custom element so the loader can use it
+// Register the component
 if (!customElements.get("supervisor-global-vars")) {
   customElements.define("supervisor-global-vars", SupervisorGlobalVars);
 }
