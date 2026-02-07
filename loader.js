@@ -1,4 +1,4 @@
-import "./supervisor-global-vars.js";
+import "https://griffindunn.github.io/wxccgadgets/supervisor-global-vars.js";
 
 class WxccGadgetLoader extends HTMLElement {
     constructor() {
