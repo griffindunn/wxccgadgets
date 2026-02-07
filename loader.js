@@ -1,10 +1,10 @@
 // ---------------------------------------------------------
-// VERSION 5.0 - SUPERVISOR GADGET & LOADER
+// VERSION 6.0 - SCRIPT INJECTION METHOD
 // ---------------------------------------------------------
-console.log("GADGET: Loading Version 5.0...");
+console.log("GADGET: Loading Version 6.0 (Script Injection)...");
 
+// Use the bundled UMD version if available, otherwise standard index
 const SDK_URL = "https://cdn.jsdelivr.net/npm/@wxcc-desktop/sdk@latest/dist/index.js";
-// !!! CHECK YOUR REGION !!!
 const API_BASE_URL = "https://api.wxcc-us1.cisco.com"; 
 
 class SupervisorGlobalVars extends HTMLElement {
@@ -19,31 +19,66 @@ class SupervisorGlobalVars extends HTMLElement {
         this.renderLoading();
         
         try {
-            console.log("GADGET: 1. Importing SDK...");
-            const module = await import(SDK_URL);
+            // 1. Load the SDK via Script Tag (Forces Global Scope)
+            await this.loadScript(SDK_URL);
             
-            console.log("GADGET: 2. Finding Desktop Class...");
-            // Robust check: Look in module exports AND global window
-            this.desktop = module.Desktop || module.default?.Desktop || window.Desktop;
+            console.log("GADGET: Script loaded. Checking global scope...");
 
-            if (!this.desktop) {
-                console.error("GADGET DUMP: Module content:", module);
-                throw new Error("SDK loaded, but 'Desktop' class was not found in module or window.");
+            // 2. Find the Desktop Class
+            // It often attaches to window.Desktop or window.wxcc.Desktop
+            if (window.Desktop) {
+                this.desktop = window.Desktop;
+                console.log("GADGET: Found window.Desktop");
+            } else if (window.wxcc && window.wxcc.Desktop) {
+                this.desktop = window.wxcc.Desktop;
+                console.log("GADGET: Found window.wxcc.Desktop");
+            } else {
+                // Last ditch effort: Check if it exported a module default
+                console.error("GADGET: Dump of window object keys:", Object.keys(window));
+                throw new Error("SDK script loaded, but 'Desktop' global was not found.");
             }
 
-            console.log("GADGET: 3. Initializing Config...");
+            // 3. Initialize
+            console.log("GADGET: Initializing Config...");
             await this.desktop.config.init();
             
-            console.log("GADGET: 4. Getting Token...");
+            console.log("GADGET: Getting Token...");
             const token = await this.desktop.identity.getAccessToken();
             
-            console.log("GADGET: 5. Fetching Data...");
+            console.log("GADGET: Fetching Variables...");
             await this.fetchVariables(token);
 
         } catch (error) {
             console.error("GADGET CRITICAL ERROR:", error);
             this.renderError(error.message);
         }
+    }
+
+    // Helper: Injects a <script> tag into the head
+    loadScript(url) {
+        return new Promise((resolve, reject) => {
+            // Check if already loaded
+            if (window.Desktop || (window.wxcc && window.wxcc.Desktop)) {
+                return resolve();
+            }
+            
+            const script = document.createElement('script');
+            script.type = 'text/javascript';
+            script.src = url;
+            script.async = true;
+            
+            script.onload = () => {
+                console.log("GADGET: SDK Script tag loaded.");
+                // Give it a tiny delay to ensure global var is set
+                setTimeout(resolve, 100);
+            };
+            
+            script.onerror = (e) => {
+                reject(new Error("Failed to load SDK script from CDN."));
+            };
+            
+            document.head.appendChild(script);
+        });
     }
 
     async fetchVariables(token) {
@@ -69,9 +104,9 @@ class SupervisorGlobalVars extends HTMLElement {
 
     renderLoading() {
         this.shadowRoot.innerHTML = `
-            <div style="padding:20px; font-family:sans-serif; border: 1px solid #ccc;">
+            <div style="padding:20px; font-family:sans-serif;">
                 <h3>Loading...</h3>
-                <p>Initializing Webex SDK...</p>
+                <p>Injecting Webex SDK...</p>
             </div>`;
     }
 
@@ -80,15 +115,12 @@ class SupervisorGlobalVars extends HTMLElement {
             <div style="padding:20px; color:red; font-family:sans-serif; border: 2px solid red;">
                 <h3>Error</h3>
                 <p>${msg}</p>
-                <p><small>Check console for "GADGET CRITICAL ERROR"</small></p>
-                <button onclick="location.reload()" style="padding:5px 10px; cursor:pointer;">Retry</button>
+                <button onclick="location.reload()">Retry</button>
             </div>`;
     }
 
     render() {
-        // Link to CSS in the styles folder
         const cssLink = `<link rel="stylesheet" href="https://griffindunn.github.io/wxccgadgets/styles/main.css">`;
-        
         const rows = this.variables.map(v => 
             `<li><strong>${v.name}</strong>: ${v.value}</li>`
         ).join('');
@@ -105,17 +137,10 @@ if (!customElements.get("supervisor-global-vars")) {
     customElements.define("supervisor-global-vars", SupervisorGlobalVars);
 }
 
-// ---------------------------------------------------------
-// LOADER COMPONENT
-// ---------------------------------------------------------
 class WxccGadgetLoader extends HTMLElement {
     constructor() { super(); this.attachShadow({ mode: 'open' }); }
-    
     connectedCallback() {
         const gadgetName = this.getAttribute('gadget-name');
-        // Visual debugger
-        this.style.border = "2px solid blue"; 
-        
         if (gadgetName) {
             const el = document.createElement(gadgetName);
             Array.from(this.attributes).forEach(attr => {
