@@ -1,10 +1,10 @@
 // ---------------------------------------------------------
-// VERSION 7.0 - ES MODULE LOAD
+// VERSION 8.0 - ESM.SH CDN (Browser Compatible)
 // ---------------------------------------------------------
-console.log("GADGET: Loading Version 7.0 (ES Module)...");
+console.log("GADGET: Loading Version 8.0 (esm.sh)...");
 
-// We use the 'esm' (ES Module) build specifically
-const SDK_URL = "https://unpkg.com/@wxcc-desktop/sdk@latest/dist/index.js";
+// esm.sh automatically converts the package to browser-native code
+const SDK_URL = "https://esm.sh/@wxcc-desktop/sdk";
 const API_BASE_URL = "https://api.wxcc-us1.cisco.com"; 
 
 class SupervisorGlobalVars extends HTMLElement {
@@ -19,33 +19,19 @@ class SupervisorGlobalVars extends HTMLElement {
         this.renderLoading();
         
         try {
-            console.log("GADGET: 1. Importing SDK Module...");
+            console.log("GADGET: 1. Importing SDK from esm.sh...");
             
-            // Standard ES Module Import
-            const module = await import(SDK_URL);
+            // We use a named import destructured from the module
+            const { Desktop } = await import(SDK_URL);
+
+            if (!Desktop) {
+                throw new Error("SDK loaded, but 'Desktop' export is missing.");
+            }
             
-            console.log("GADGET: Module Loaded. Keys:", Object.keys(module));
+            this.desktop = Desktop;
+            console.log("GADGET: SDK Loaded successfully.");
 
-            // The SDK usually exports { Desktop } named export
-            if (module.Desktop) {
-                this.desktop = module.Desktop;
-                console.log("GADGET: Found module.Desktop");
-            } 
-            // Sometimes it's a default export
-            else if (module.default && module.default.Desktop) {
-                this.desktop = module.default.Desktop;
-                console.log("GADGET: Found module.default.Desktop");
-            }
-            // Sometimes the default export IS the Desktop class
-            else if (module.default && typeof module.default.config === 'object') {
-                 this.desktop = module.default;
-                 console.log("GADGET: Found module.default (as Desktop)");
-            }
-            else {
-                throw new Error("SDK loaded, but could not find 'Desktop' class in exports.");
-            }
-
-            // 3. Initialize
+            // 2. Initialize
             console.log("GADGET: Initializing Config...");
             await this.desktop.config.init();
             
@@ -57,7 +43,7 @@ class SupervisorGlobalVars extends HTMLElement {
 
         } catch (error) {
             console.error("GADGET CRITICAL ERROR:", error);
-            this.renderError(error.message + " (Check Console)");
+            this.renderError(error.message);
         }
     }
 
@@ -86,7 +72,7 @@ class SupervisorGlobalVars extends HTMLElement {
         this.shadowRoot.innerHTML = `
             <div style="padding:20px; font-family:sans-serif;">
                 <h3>Loading...</h3>
-                <p>Connecting to Webex...</p>
+                <p>Connecting to Webex (v8.0)...</p>
             </div>`;
     }
 
