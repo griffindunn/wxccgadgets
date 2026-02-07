@@ -7,6 +7,10 @@ class WxccGadgetLoader extends HTMLElement {
     }
 
     connectedCallback() {
+        // Debugging visual aid
+        this.style.border = "5px solid red";
+        this.style.display = "block";
+        this.style.height = "100%";
         // 1. Get the gadget name from the layout attributes
         const gadgetName = this.getAttribute('gadget-name');
         
