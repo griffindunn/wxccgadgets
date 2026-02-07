@@ -145,7 +145,7 @@ export class SupervisorGlobalVars extends HTMLElement {
    */
   render() {
     const title = this.getAttribute("title") || "Global Variables";
-    const cssLink = `<link rel="stylesheet" href="https://griffindunn.github.io/wxccgadgets/main.css">`;
+    const cssLink = `<link rel="stylesheet" href="https://griffindunn.github.io/wxccgadgets/styles/main.css">`;
 
     // Local override styles for the table
     const styles = `
