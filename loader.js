@@ -1,40 +1,50 @@
-import "https://griffindunn.github.io/wxccgadgets/supervisor-global-vars.js";
-
 class WxccGadgetLoader extends HTMLElement {
     constructor() {
         super();
         this.attachShadow({ mode: 'open' });
     }
 
-    connectedCallback() {
-        // Debugging visual aid
-        this.style.border = "5px solid red";
+    async connectedCallback() {
+        // 1. Debugging Border (Verify this appears first!)
+        this.style.border = "5px solid red"; 
         this.style.display = "block";
-        this.style.height = "100%";
-        // 1. Get the gadget name from the layout attributes
-        const gadgetName = this.getAttribute('gadget-name');
+        this.style.padding = "10px";
         
-        if (!gadgetName) {
-            this.shadowRoot.innerHTML = `<div style="color: red; padding: 10px;">Error: 'gadget-name' attribute is missing.</div>`;
+        // 2. Load the Child Component Dynamically
+        try {
+            // This loads your other file safely without crashing the script
+            await import("https://griffindunn.github.io/wxccgadgets/supervisor-global-vars.js");
+            console.log("Loader: Child script loaded successfully.");
+        } catch (err) {
+            console.error("Loader: Failed to load child script.", err);
+            this.shadowRoot.innerHTML = `<div style="color:red">Error loading gadget file. Check console.</div>`;
             return;
         }
 
-        // 2. Create the dynamic element (e.g., <supervisor-global-vars>)
+        // 3. Get the gadget name from JSON
+        const gadgetName = this.getAttribute('gadget-name');
+        
+        if (!gadgetName) {
+            this.shadowRoot.innerHTML = `<div>Error: 'gadget-name' attribute is missing.</div>`;
+            return;
+        }
+
+        // 4. Create the element (e.g., <supervisor-global-vars>)
         const gadgetElement = document.createElement(gadgetName);
 
-        // 3. Pass down any other attributes defined in the layout
+        // 5. Pass down attributes
         Array.from(this.attributes).forEach(attr => {
             if (attr.name !== 'gadget-name') {
                 gadgetElement.setAttribute(attr.name, attr.value);
             }
         });
 
-        // 4. Append to Shadow DOM
+        // 6. Show it!
         this.shadowRoot.appendChild(gadgetElement);
     }
 }
 
-// Register the generic loader component
+// Register the loader
 if (!customElements.get('wxcc-gadget-loader')) {
     customElements.define('wxcc-gadget-loader', WxccGadgetLoader);
 }
