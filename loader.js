@@ -5,23 +5,24 @@ class WxccGadgetLoader extends HTMLElement {
     }
 
     async connectedCallback() {
-        // 1. Debugging Border (Verify this appears first!)
+        // Debugging Border (Keep this until it works fully!)
         this.style.border = "5px solid red"; 
         this.style.display = "block";
         this.style.padding = "10px";
         
-        // 2. Load the Child Component Dynamically
         try {
-            // This loads your other file safely without crashing the script
+            // *** FIX: Point to the 'gadgets' folder ***
+            // We use the full URL to be 100% safe.
+            // (Ensure this matches your GitHub username/repo exactly)
             await import("https://griffindunn.github.io/wxccgadgets/gadgets/supervisor-global-vars.js");
+            
             console.log("Loader: Child script loaded successfully.");
         } catch (err) {
             console.error("Loader: Failed to load child script.", err);
-            this.shadowRoot.innerHTML = `<div style="color:red">Error loading gadget file. Check console.</div>`;
+            this.shadowRoot.innerHTML = `<div style="color:red">Error loading gadget file: ${err.message}</div>`;
             return;
         }
 
-        // 3. Get the gadget name from JSON
         const gadgetName = this.getAttribute('gadget-name');
         
         if (!gadgetName) {
@@ -29,22 +30,18 @@ class WxccGadgetLoader extends HTMLElement {
             return;
         }
 
-        // 4. Create the element (e.g., <supervisor-global-vars>)
         const gadgetElement = document.createElement(gadgetName);
 
-        // 5. Pass down attributes
         Array.from(this.attributes).forEach(attr => {
             if (attr.name !== 'gadget-name') {
                 gadgetElement.setAttribute(attr.name, attr.value);
             }
         });
 
-        // 6. Show it!
         this.shadowRoot.appendChild(gadgetElement);
     }
 }
 
-// Register the loader
 if (!customElements.get('wxcc-gadget-loader')) {
     customElements.define('wxcc-gadget-loader', WxccGadgetLoader);
 }
