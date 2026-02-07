@@ -13,7 +13,7 @@ class WxccGadgetLoader extends HTMLElement {
         // 2. Load the Child Component Dynamically
         try {
             // This loads your other file safely without crashing the script
-            await import("https://griffindunn.github.io/wxccgadgets/supervisor-global-vars.js");
+            await import("https://griffindunn.github.io/wxccgadgets/gadgets/supervisor-global-vars.js");
             console.log("Loader: Child script loaded successfully.");
         } catch (err) {
             console.error("Loader: Failed to load child script.", err);
