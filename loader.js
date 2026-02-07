@@ -1,6 +1,7 @@
 // 1. Define the Supervisor Gadget Component
 const SDK_URL = "https://cdn.jsdelivr.net/npm/@wxcc-desktop/sdk@latest/dist/index.js";
-const API_BASE_URL = "https://api.wxcc-us1.cisco.com"; // CHECK YOUR REGION (us1, eu1, etc)
+// CHECK YOUR REGION BELOW: (us1, eu1, ap1, etc.)
+const API_BASE_URL = "https://api.wxcc-us1.cisco.com"; 
 
 class SupervisorGlobalVars extends HTMLElement {
     constructor() {
@@ -13,16 +14,30 @@ class SupervisorGlobalVars extends HTMLElement {
     async connectedCallback() {
         this.renderLoading();
         try {
-            // Dynamically load the SDK
+            console.log("Attempting to load SDK...");
             const module = await import(SDK_URL);
-            this.desktop = module.Desktop;
             
+            // *** FIX: ROBUST SDK LOADING ***
+            // Try to find the Desktop object in the module or the window
+            this.desktop = module.Desktop || module.default || window.Desktop;
+
+            if (!this.desktop) {
+                console.error("SDK Module Dump:", module);
+                throw new Error("SDK loaded, but 'Desktop' class was not found.");
+            }
+
+            console.log("SDK Found. Initializing...");
+            
+            // Now safe to access .config
             await this.desktop.config.init();
+            
+            console.log("SDK Initialized. Getting Token...");
             const token = await this.desktop.identity.getAccessToken();
             
             await this.fetchVariables(token);
+
         } catch (error) {
-            console.error("Gadget Error:", error);
+            console.error("Gadget Critical Error:", error);
             this.renderError(error.message);
         }
     }
@@ -32,6 +47,11 @@ class SupervisorGlobalVars extends HTMLElement {
             const response = await fetch(`${API_BASE_URL}/v1/global-variables?page=0&pageSize=100`, {
                 headers: { "Authorization": `Bearer ${token}` }
             });
+
+            if (!response.ok) {
+                throw new Error(`API Error: ${response.status} ${response.statusText}`);
+            }
+
             const json = await response.json();
             this.variables = Array.isArray(json) ? json : (json.data || []);
             this.render();
@@ -41,15 +61,19 @@ class SupervisorGlobalVars extends HTMLElement {
     }
 
     renderLoading() {
-        this.shadowRoot.innerHTML = `<div style="padding:20px">Loading Global Variables...</div>`;
+        this.shadowRoot.innerHTML = `<div style="padding:20px; font-family:sans-serif;">Loading Global Variables...</div>`;
     }
 
     renderError(msg) {
-        this.shadowRoot.innerHTML = `<div style="padding:20px; color:red"><b>Error:</b> ${msg}</div>`;
+        this.shadowRoot.innerHTML = `
+            <div style="padding:20px; color:red; font-family:sans-serif; border: 2px solid red;">
+                <h3>Error</h3>
+                <p>${msg}</p>
+                <p><small>Check the browser console (F12) for more details.</small></p>
+            </div>`;
     }
 
     render() {
-        // Link to your styles in the 'styles' folder
         const cssLink = `<link rel="stylesheet" href="https://griffindunn.github.io/wxccgadgets/styles/main.css">`;
         
         const rows = this.variables.map(v => 
@@ -64,11 +88,10 @@ class SupervisorGlobalVars extends HTMLElement {
     }
 }
 
-// Register the Supervisor Component immediately
+// Register the Supervisor Component
 if (!customElements.get("supervisor-global-vars")) {
     customElements.define("supervisor-global-vars", SupervisorGlobalVars);
 }
-
 
 // 2. Define the Loader Component
 class WxccGadgetLoader extends HTMLElement {
@@ -78,9 +101,6 @@ class WxccGadgetLoader extends HTMLElement {
     }
 
     connectedCallback() {
-        // Since the Supervisor class is defined above, we don't need to import anything!
-        // Just create the element directly.
-        
         const gadgetName = this.getAttribute('gadget-name');
         if (!gadgetName) {
             this.shadowRoot.innerHTML = `<div>Error: 'gadget-name' missing</div>`;
@@ -89,7 +109,6 @@ class WxccGadgetLoader extends HTMLElement {
 
         const gadgetElement = document.createElement(gadgetName);
         
-        // Pass attributes down
         Array.from(this.attributes).forEach(attr => {
             if (attr.name !== 'gadget-name') {
                 gadgetElement.setAttribute(attr.name, attr.value);
@@ -100,7 +119,6 @@ class WxccGadgetLoader extends HTMLElement {
     }
 }
 
-// Register the Loader Component
 if (!customElements.get('wxcc-gadget-loader')) {
     customElements.define('wxcc-gadget-loader', WxccGadgetLoader);
 }
