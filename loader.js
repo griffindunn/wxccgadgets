@@ -1,10 +1,10 @@
 // ---------------------------------------------------------
-// VERSION 6.0 - SCRIPT INJECTION METHOD
+// VERSION 7.0 - ES MODULE LOAD
 // ---------------------------------------------------------
-console.log("GADGET: Loading Version 6.0 (Script Injection)...");
+console.log("GADGET: Loading Version 7.0 (ES Module)...");
 
-// Use the bundled UMD version if available, otherwise standard index
-const SDK_URL = "https://cdn.jsdelivr.net/npm/@wxcc-desktop/sdk@latest/dist/index.js";
+// We use the 'esm' (ES Module) build specifically
+const SDK_URL = "https://unpkg.com/@wxcc-desktop/sdk@latest/dist/index.js";
 const API_BASE_URL = "https://api.wxcc-us1.cisco.com"; 
 
 class SupervisorGlobalVars extends HTMLElement {
@@ -19,23 +19,30 @@ class SupervisorGlobalVars extends HTMLElement {
         this.renderLoading();
         
         try {
-            // 1. Load the SDK via Script Tag (Forces Global Scope)
-            await this.loadScript(SDK_URL);
+            console.log("GADGET: 1. Importing SDK Module...");
             
-            console.log("GADGET: Script loaded. Checking global scope...");
+            // Standard ES Module Import
+            const module = await import(SDK_URL);
+            
+            console.log("GADGET: Module Loaded. Keys:", Object.keys(module));
 
-            // 2. Find the Desktop Class
-            // It often attaches to window.Desktop or window.wxcc.Desktop
-            if (window.Desktop) {
-                this.desktop = window.Desktop;
-                console.log("GADGET: Found window.Desktop");
-            } else if (window.wxcc && window.wxcc.Desktop) {
-                this.desktop = window.wxcc.Desktop;
-                console.log("GADGET: Found window.wxcc.Desktop");
-            } else {
-                // Last ditch effort: Check if it exported a module default
-                console.error("GADGET: Dump of window object keys:", Object.keys(window));
-                throw new Error("SDK script loaded, but 'Desktop' global was not found.");
+            // The SDK usually exports { Desktop } named export
+            if (module.Desktop) {
+                this.desktop = module.Desktop;
+                console.log("GADGET: Found module.Desktop");
+            } 
+            // Sometimes it's a default export
+            else if (module.default && module.default.Desktop) {
+                this.desktop = module.default.Desktop;
+                console.log("GADGET: Found module.default.Desktop");
+            }
+            // Sometimes the default export IS the Desktop class
+            else if (module.default && typeof module.default.config === 'object') {
+                 this.desktop = module.default;
+                 console.log("GADGET: Found module.default (as Desktop)");
+            }
+            else {
+                throw new Error("SDK loaded, but could not find 'Desktop' class in exports.");
             }
 
             // 3. Initialize
@@ -50,35 +57,8 @@ class SupervisorGlobalVars extends HTMLElement {
 
         } catch (error) {
             console.error("GADGET CRITICAL ERROR:", error);
-            this.renderError(error.message);
+            this.renderError(error.message + " (Check Console)");
         }
-    }
-
-    // Helper: Injects a <script> tag into the head
-    loadScript(url) {
-        return new Promise((resolve, reject) => {
-            // Check if already loaded
-            if (window.Desktop || (window.wxcc && window.wxcc.Desktop)) {
-                return resolve();
-            }
-            
-            const script = document.createElement('script');
-            script.type = 'text/javascript';
-            script.src = url;
-            script.async = true;
-            
-            script.onload = () => {
-                console.log("GADGET: SDK Script tag loaded.");
-                // Give it a tiny delay to ensure global var is set
-                setTimeout(resolve, 100);
-            };
-            
-            script.onerror = (e) => {
-                reject(new Error("Failed to load SDK script from CDN."));
-            };
-            
-            document.head.appendChild(script);
-        });
     }
 
     async fetchVariables(token) {
@@ -106,7 +86,7 @@ class SupervisorGlobalVars extends HTMLElement {
         this.shadowRoot.innerHTML = `
             <div style="padding:20px; font-family:sans-serif;">
                 <h3>Loading...</h3>
-                <p>Injecting Webex SDK...</p>
+                <p>Connecting to Webex...</p>
             </div>`;
     }
 
