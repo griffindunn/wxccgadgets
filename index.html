@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WxCC Gadget Wrapper</title>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@wxcc-desktop/sdk@latest/dist/index.js"></script>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; }
+    </style>
+</head>
+<body>
+    <wxcc-gadget-loader id="loader"></wxcc-gadget-loader>
+
+    <script type="module" src="./loader.js"></script>
+
+    <script>
+        // Helper to grab query params from the iFrame URL
+        // We will pass the gadget name in the URL in Step 3
+        const params = new URLSearchParams(window.location.search);
+        const gadgetName = params.get('gadget');
+        const loader = document.getElementById('loader');
+        if (gadgetName) {
+            loader.setAttribute('gadget-name', gadgetName);
+        }
+    </script>
+</body>
+</html>
