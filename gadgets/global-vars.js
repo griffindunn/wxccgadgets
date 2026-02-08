@@ -1,12 +1,13 @@
 /* gadgets/global-vars.js */
 (function() {
-    console.log('Global Variable Manager v2 loading...');
+    console.log('Global Variable Manager v2.1 loading...');
 
     const template = document.createElement('template');
     template.innerHTML = `
       <style>@import url('https://griffindunn.github.io/wxccgadgets/styles/main.css');</style>
       <div id="app">
           <h2>Global Variables Manager</h2>
+          <div id="debug-info" style="font-size: 0.8em; color: #888; margin-bottom: 10px; display: none;"></div>
           <div id="content"></div>
       </div>
       <div id="toast">Notification</div>
@@ -18,7 +19,6 @@
             this.attachShadow({ mode: 'open' });
             this.shadowRoot.appendChild(template.content.cloneNode(true));
             
-            // State
             this.ctx = {
                 token: null,
                 orgId: null,
@@ -33,21 +33,27 @@
         }
 
         attributeChangedCallback(name, oldValue, newValue) {
+            console.log(`[GlobalVarManager] Attribute changed: ${name} = ${newValue}`);
+            
             if (name === 'token') this.ctx.token = newValue;
             if (name === 'org-id') this.ctx.orgId = newValue;
             if (name === 'data-center') {
                 this.ctx.region = newValue;
-                this.ctx.baseUrl = this.getApiUrl(newValue);
+                this.ctx.baseUrl = this.resolveApiUrl(newValue);
             }
 
             // Only load if we have all 3 pieces of info
             if (this.ctx.token && this.ctx.orgId && this.ctx.baseUrl) {
+                this.updateDebugDisplay();
                 this.loadVariables();
             }
         }
 
-        // --- Helper: Get API URL based on Data Center ---
-        getApiUrl(dc) {
+        // --- FIXED: Handle 'produs1' vs 'us1' ---
+        resolveApiUrl(rawDc) {
+            // Remove 'prod' prefix if present (e.g. produs1 -> us1)
+            const cleanDc = rawDc ? rawDc.replace('prod', '').toLowerCase() : 'us1';
+            
             const map = {
                 'us1': 'https://api.wxcc-us1.cisco.com',
                 'eu1': 'https://api.wxcc-eu1.cisco.com',
@@ -55,18 +61,26 @@
                 'anz1': 'https://api.wxcc-anz1.cisco.com',
                 'ca1': 'https://api.wxcc-ca1.cisco.com'
             };
-            return map[dc] || map['us1']; // Default to US1 if unknown
+            
+            const url = map[cleanDc] || map['us1']; // Default to us1 if match fails
+            console.log(`[GlobalVarManager] DC Mapping: Input="${rawDc}" -> Clean="${cleanDc}" -> URL="${url}"`);
+            return url;
         }
 
-        // --- Core Logic: Fetch Variables ---
+        updateDebugDisplay() {
+            // Helpful for verifying connection details in the UI if needed
+            const debugEl = this.shadowRoot.getElementById('debug-info');
+            debugEl.innerText = `Org: ${this.ctx.orgId} | API: ${this.ctx.baseUrl}`;
+        }
+
         async loadVariables() {
             const contentDiv = this.shadowRoot.getElementById('content');
             contentDiv.innerHTML = '<div class="loading"><span>Retrieving Global Variables...</span></div>';
 
             try {
-                // Fetch CAD Variables (Page 0, 100 items)
                 const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/cad-variable?page=0&pageSize=100`;
-                
+                console.log(`[GlobalVarManager] Fetching: ${url}`);
+
                 const response = await fetch(url, {
                     method: 'GET',
                     headers: {
@@ -75,41 +89,52 @@
                     }
                 });
 
-                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                if (!response.ok) {
+                    throw new Error(`API Error ${response.status}: ${response.statusText}`);
+                }
 
                 const json = await response.json();
-                // Filter: Only show active variables
+                console.log('[GlobalVarManager] Data received:', json);
+
+                // Filter active variables
                 this.variables = (json.data || []).filter(v => v.active !== false);
                 
                 this.render();
 
             } catch (err) {
-                console.error(err);
-                contentDiv.innerHTML = `<div style="color:red">Error loading data: ${err.message}</div>`;
+                console.error('[GlobalVarManager] Load failed:', err);
+                contentDiv.innerHTML = `
+                    <div style="color: #d63d3d; padding: 15px; border: 1px solid #d63d3d; border-radius: 4px; background: #fff5f5;">
+                        <strong>Connection Error</strong><br>
+                        Failed to load variables.<br>
+                        <small>${err.message}</small><br>
+                        <small>Target URL: ${this.ctx.baseUrl}</small>
+                    </div>`;
             }
         }
 
-        // --- Core Logic: Render UI ---
         render() {
             const contentDiv = this.shadowRoot.getElementById('content');
             
             if (this.variables.length === 0) {
-                contentDiv.innerHTML = '<p>No active global variables found.</p>';
+                contentDiv.innerHTML = `
+                    <div style="padding: 20px; text-align: center; color: #666;">
+                        No active global variables found for this organization.
+                    </div>`;
                 return;
             }
 
             let html = '';
             this.variables.forEach(v => {
-                const isBool = v.variableType === 'BOOLEAN';
-                const value = v.defaultValue || ''; // Current global value
+                const isBool = (v.variableType === 'BOOLEAN');
+                const value = v.defaultValue || ''; 
                 
-                // Input generation based on type
                 let inputHtml = '';
                 if (isBool) {
                     inputHtml = `
                         <select id="input-${v.id}">
-                            <option value="true" ${value === 'true' ? 'selected' : ''}>TRUE</option>
-                            <option value="false" ${value === 'false' ? 'selected' : ''}>FALSE</option>
+                            <option value="true" ${String(value) === 'true' ? 'selected' : ''}>TRUE</option>
+                            <option value="false" ${String(value) === 'false' ? 'selected' : ''}>FALSE</option>
                         </select>
                     `;
                 } else {
@@ -132,35 +157,31 @@
 
             contentDiv.innerHTML = html;
 
-            // Attach Event Listeners to Buttons
             const buttons = contentDiv.querySelectorAll('.save-btn');
             buttons.forEach(btn => {
                 btn.addEventListener('click', (e) => this.handleSave(e.target.dataset.id, e.target));
             });
         }
 
-        // --- Core Logic: Save Changes ---
         async handleSave(varId, btnElement) {
             const input = this.shadowRoot.getElementById(`input-${varId}`);
             const newValue = input.value;
             const originalText = btnElement.innerText;
 
-            // UI Feedback: Loading
             btnElement.disabled = true;
             btnElement.innerText = "Saving...";
 
-            // Find the original object to preserve other fields
             const originalVar = this.variables.find(v => v.id === varId);
 
             try {
+                // IMPORTANT: The update endpoint is usually specific to the variable ID
                 const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/cad-variable/${varId}`;
                 
-                // Construct Payload (Must include required fields from original)
                 const payload = {
                     name: originalVar.name,
                     description: originalVar.description,
                     variableType: originalVar.variableType,
-                    defaultValue: newValue, // The update
+                    defaultValue: newValue,
                     active: true
                 };
 
@@ -168,32 +189,31 @@
                     method: 'PUT',
                     headers: {
                         'Authorization': `Bearer ${this.ctx.token}`,
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     },
                     body: JSON.stringify(payload)
                 });
 
-                if (!response.ok) throw new Error(`Save failed: ${response.status}`);
+                if (!response.ok) {
+                    throw new Error(`Status ${response.status}`);
+                }
 
-                this.showNotification(`Saved "${originalVar.name}" successfully!`, 'success');
+                this.showNotification(`Saved "${originalVar.name}"`, 'success');
 
             } catch (err) {
-                console.error(err);
-                this.showNotification(`Failed: ${err.message}`, 'error');
+                console.error('[GlobalVarManager] Save failed:', err);
+                this.showNotification(`Save Failed: ${err.message}`, 'error');
             } finally {
-                // UI Feedback: Restore
                 btnElement.disabled = false;
                 btnElement.innerText = originalText;
             }
         }
 
-        // --- Helper: Toast Notification ---
         showNotification(msg, type) {
             const toast = this.shadowRoot.getElementById('toast');
             toast.innerText = msg;
             toast.className = `show ${type}`;
-            
-            // Hide after 3 seconds
             setTimeout(() => { 
                 toast.className = toast.className.replace("show", ""); 
             }, 3000);
