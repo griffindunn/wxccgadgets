@@ -1,6 +1,6 @@
 /* gadgets/global-vars.js */
 (function() {
-    console.log('Global Variable Manager v2.3 (Full Payload Fix) loading...');
+    console.log('Global Variable Manager v2.4 (Sorted & Grouped) loading...');
 
     const template = document.createElement('template');
     template.innerHTML = `
@@ -82,8 +82,20 @@
 
                 const json = await response.json();
                 
-                // Store the raw data exactly as it came from the API
                 this.variables = (json.data || []).filter(v => v.active !== false);
+                
+                // --- SORTING LOGIC ---
+                this.variables.sort((a, b) => {
+                    // 1. Sort by Type first
+                    if (a.variableType < b.variableType) return -1;
+                    if (a.variableType > b.variableType) return 1;
+                    
+                    // 2. Sort by Name alphabetically within type
+                    if (a.name.toLowerCase() < b.name.toLowerCase()) return -1;
+                    if (a.name.toLowerCase() > b.name.toLowerCase()) return 1;
+                    return 0;
+                });
+
                 this.render();
 
             } catch (err) {
@@ -101,10 +113,18 @@
             }
 
             let html = '';
+            let currentType = '';
+
             this.variables.forEach(v => {
-                const type = (v.variableType || '').toUpperCase();
+                const type = (v.variableType || 'UNKNOWN').toUpperCase();
                 const isBool = (type === 'BOOLEAN');
                 const value = v.defaultValue; 
+                
+                // --- GROUP HEADERS ---
+                if (type !== currentType) {
+                    currentType = type;
+                    html += `<h3 class="category-header">${currentType} Variables</h3>`;
+                }
                 
                 let inputHtml = '';
                 if (isBool) {
@@ -123,7 +143,6 @@
                     <div class="var-row">
                         <div class="var-info">
                             <span class="var-name">${v.name}</span>
-                            <span class="var-id">${v.variableType}</span>
                         </div>
                         <div class="var-input-container">
                             ${inputHtml}
@@ -148,10 +167,9 @@
             btnElement.disabled = true;
             btnElement.innerText = "Saving...";
 
-            // Retrieve the full original object
             const originalVar = this.variables.find(v => v.id === varId);
 
-            // Correctly cast boolean values if needed
+            // Correctly cast boolean values
             if (originalVar.variableType && originalVar.variableType.toUpperCase() === 'BOOLEAN') {
                 newValue = (newValue === 'true'); 
             }
@@ -159,16 +177,11 @@
             try {
                 const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/cad-variable/${varId}`;
                 
-                // --- THE FIX: Spread the entire original object ---
-                // We take all existing properties (...originalVar) and only overwrite defaultValue.
-                // We also ensure the 'id' is explicitly included in the body.
                 const payload = {
                     ...originalVar, 
                     id: varId, 
                     defaultValue: newValue 
                 };
-
-                console.log('[GlobalVarManager] Payload:', JSON.stringify(payload));
 
                 const response = await fetch(url, {
                     method: 'PUT',
@@ -182,8 +195,6 @@
 
                 if (!response.ok) {
                     const errText = await response.text();
-                    console.error('API Error Response:', errText);
-                    // Attempt to parse a readable error message from WxCC
                     let friendlyError = `Status ${response.status}`;
                     try {
                         const errJson = JSON.parse(errText);
@@ -194,7 +205,6 @@
                     throw new Error(friendlyError);
                 }
 
-                // Update local state to reflect the change
                 originalVar.defaultValue = newValue;
                 this.showNotification(`Saved "${originalVar.name}"`, 'success');
 
