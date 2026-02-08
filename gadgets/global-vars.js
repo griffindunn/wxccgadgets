@@ -1,14 +1,14 @@
 /* gadgets/global-vars.js */
 (function() {
-    // Phase 10: UX Improvements (Pre-pop, In-place Delete, Clean UI)
-    const VERSION = "v3.3";
+    // Phase 11: Header Rename + Boolean Dropdown Fixes + Resize Support
+    const VERSION = "v3.4";
     console.log(`Global Variable Manager ${VERSION} loading...`);
 
     const template = document.createElement('template');
     template.innerHTML = `
       <style>@import url('https://griffindunn.github.io/wxccgadgets/styles/main.css');</style>
       <div id="app">
-          <h2>Global Variables Manager</h2>
+          <h2>Supervisor Controls</h2>
           <div id="debug-info" style="font-size: 0.8em; color: #888; margin-bottom: 10px; display: none;"></div>
           <div id="content"></div>
       </div>
@@ -130,7 +130,10 @@
         }
 
         buildVariableCard(v) {
-            const isBool = (v.variableType === 'BOOLEAN');
+            // Case-insensitive check for boolean type
+            const vType = (v.variableType || '').toLowerCase();
+            const isBool = (vType === 'boolean');
+            
             const inputHtml = isBool 
                 ? `<select id="input-${v.id}">
                      <option value="true" ${String(v.defaultValue) === 'true' ? 'selected' : ''}>TRUE</option>
@@ -224,7 +227,6 @@
             const container = this.shadowRoot.getElementById(`new-shift-container-${bhId}`);
             if (!container) return;
 
-            // Pre-populate defaults
             const defaultShift = { 
                 name: "New Shift", 
                 startTime: "09:00", 
@@ -232,7 +234,7 @@
                 days: [] 
             };
             
-            // Render Edit Form (true = isNew)
+            // Render Edit Form
             container.innerHTML = this.getShiftEditHTML(defaultShift, true);
             container.classList.add('active');
 
@@ -491,7 +493,10 @@
             btnElement.innerText = "...";
 
             const originalVar = this.data.variables.find(v => v.id === varId);
-            if (originalVar.variableType === 'BOOLEAN') newValue = (newValue === 'true'); 
+            
+            // Handle saving boolean correctly
+            const vType = (originalVar.variableType || '').toLowerCase();
+            if (vType === 'boolean') newValue = (newValue === 'true'); 
 
             try {
                 const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/cad-variable/${varId}`;
