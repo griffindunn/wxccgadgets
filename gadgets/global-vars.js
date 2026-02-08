@@ -1,7 +1,7 @@
 /* gadgets/global-vars.js */
 (function() {
-    // Phase 8: Immediate Edit Mode + Realtime Conflict Checking
-    const VERSION = "v3.1";
+    // Phase 9: Add Shift Top-Area + Conflict Toasts + Auto-Hide Save
+    const VERSION = "v3.2";
     console.log(`Global Variable Manager ${VERSION} loading...`);
 
     const template = document.createElement('template');
@@ -163,10 +163,9 @@
             daysOfWeek.forEach((dayName, dayIndex) => {
                 const dayCode = shortDays[dayIndex];
                 
-                // --- FIX: Strictly ensure the shift includes THIS specific day ---
                 const activeShifts = shifts
                     .map((s, idx) => ({ ...s, originalIndex: idx }))
-                    .filter(s => s.days && s.days.includes(dayCode)) // Strict check
+                    .filter(s => s.days && s.days.includes(dayCode))
                     .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
                 let rowsHtml = '';
@@ -197,6 +196,7 @@
                     </div>
                     <button class="btn btn-black add-shift-btn" data-bh="${bh.id}">Add Shift</button>
                 </div>
+                <div id="new-shift-container-${bh.id}" class="bh-new-shift-area"></div>
                 <div class="bh-content">
                     ${daysHtml}
                 </div>
@@ -208,7 +208,7 @@
 
         attachEventListeners(root) {
             root.querySelectorAll('.save-var-btn').forEach(b => b.addEventListener('click', e => this.handleSaveVariable(e.target.dataset.id, e.target)));
-            root.querySelectorAll('.add-shift-btn').forEach(b => b.addEventListener('click', e => this.addShift(e.target.dataset.bh)));
+            root.querySelectorAll('.add-shift-btn').forEach(b => b.addEventListener('click', e => this.openAddShiftUI(e.target.dataset.bh)));
             root.querySelectorAll('.save-bh-btn').forEach(b => b.addEventListener('click', e => this.handleSaveBusinessHours(e.target.dataset.bh, e.target)));
             
             root.querySelectorAll('.shift-row').forEach(row => {
@@ -219,47 +219,135 @@
             });
         }
 
-        addShift(bhId) {
-            // Create the shift object
-            const newShift = {
-                name: "New Shift", days: ["MON", "TUE", "WED", "THU", "FRI"], startTime: "09:00", endTime: "17:00"
-            };
-            this.editState[bhId].push(newShift);
-            this.hasChanges[bhId] = true;
+        // --- NEW: Add Shift UI ---
+        openAddShiftUI(bhId) {
+            const container = this.shadowRoot.getElementById(`new-shift-container-${bhId}`);
+            if (!container) return;
+
+            const allDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
             
-            // Re-render to show it
-            this.render();
+            // Render Edit Form
+            container.innerHTML = this.getShiftEditHTML({ name: "", startTime: "", endTime: "", days: [] }, true); // true = creating
+            container.classList.add('active');
 
-            // --- AUTO-OPEN EDIT MODE ---
-            const newIndex = this.editState[bhId].length - 1;
-            // Find the first instance of this new shift in the DOM to open it
-            // We just check Monday (default day) to find the DOM element
-            const domRow = this.shadowRoot.querySelector(`.shift-row[data-bh="${bhId}"][data-idx="${newIndex}"]`);
-            if (domRow) {
-                this.openEditShiftUI(bhId, newIndex, domRow);
-                // Scroll into view
-                domRow.nextElementSibling.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        }
+            // --- Handlers for New Shift ---
+            const editBox = container.querySelector('.shift-edit-box');
 
-        deleteShift(bhId, idx) {
-            if(confirm("Delete this shift?")) {
-                this.editState[bhId].splice(idx, 1);
+            editBox.querySelectorAll('.day-pill').forEach(t => {
+                t.addEventListener('click', (e) => {
+                    e.currentTarget.classList.toggle('selected');
+                    if(e.currentTarget.classList.contains('selected')) {
+                        e.currentTarget.innerHTML = `&#10003; ${e.currentTarget.dataset.day}`;
+                    } else {
+                        e.currentTarget.innerText = e.currentTarget.dataset.day;
+                    }
+                });
+            });
+
+            // Cancel
+            editBox.querySelector('.cancel-edit-btn').addEventListener('click', () => {
+                container.innerHTML = '';
+                container.classList.remove('active');
+            });
+
+            // Delete (for new shift, acts same as cancel)
+            editBox.querySelector('.delete-shift-btn').addEventListener('click', () => {
+                container.innerHTML = '';
+                container.classList.remove('active');
+            });
+
+            // Confirm
+            editBox.querySelector('.confirm-edit-btn').addEventListener('click', () => {
+                const name = editBox.querySelector('.edit-name').value;
+                const start = editBox.querySelector('.edit-start').value;
+                const end = editBox.querySelector('.edit-end').value;
+                const days = Array.from(editBox.querySelectorAll('.day-pill.selected')).map(el => el.dataset.day);
+
+                const validation = this.validateShift(name, start, end, days);
+                if (validation) { this.showNotification(validation, 'error'); return; }
+
+                // Check conflict against ALL existing shifts
+                const conflict = this.checkConflicts({ name, startTime: start, endTime: end, days }, this.editState[bhId]);
+                if (conflict) { this.showNotification(conflict, 'error'); return; }
+
+                // Valid! Add to state
+                this.editState[bhId].push({ name, startTime: start, endTime: end, days });
                 this.hasChanges[bhId] = true;
-                this.render();
-            }
+                this.render(); // Re-render will clear the add box
+            });
         }
 
+        // --- Edit Existing Shift UI ---
         openEditShiftUI(bhId, idx, rowEl) {
             const shift = this.editState[bhId][idx];
-            const allDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+            
+            // Insert after row
+            rowEl.insertAdjacentHTML('afterend', this.getShiftEditHTML(shift, false));
+            const editBox = rowEl.nextElementSibling;
+            rowEl.style.display = 'none'; // Hide row
 
-            const editHTML = `
+            // Handlers
+            editBox.querySelectorAll('.day-pill').forEach(t => {
+                t.addEventListener('click', (e) => {
+                    e.currentTarget.classList.toggle('selected');
+                    if(e.currentTarget.classList.contains('selected')) {
+                        e.currentTarget.innerHTML = `&#10003; ${e.currentTarget.dataset.day}`;
+                    } else {
+                        e.currentTarget.innerText = e.currentTarget.dataset.day;
+                    }
+                });
+            });
+
+            // Cancel
+            editBox.querySelector('.cancel-edit-btn').addEventListener('click', () => {
+                editBox.remove();
+                rowEl.style.display = 'grid';
+            });
+
+            // Delete
+            editBox.querySelector('.delete-shift-btn').addEventListener('click', () => {
+                if(confirm("Delete this shift?")) {
+                    this.editState[bhId].splice(idx, 1);
+                    this.hasChanges[bhId] = true;
+                    this.render();
+                }
+            });
+
+            // Confirm
+            editBox.querySelector('.confirm-edit-btn').addEventListener('click', () => {
+                const name = editBox.querySelector('.edit-name').value;
+                const start = editBox.querySelector('.edit-start').value;
+                const end = editBox.querySelector('.edit-end').value;
+                const days = Array.from(editBox.querySelectorAll('.day-pill.selected')).map(el => el.dataset.day);
+
+                const validation = this.validateShift(name, start, end, days);
+                if (validation) { this.showNotification(validation, 'error'); return; }
+
+                // Conflict check: Clone array and update specific index to test
+                const tempShifts = [...this.editState[bhId]];
+                // Temporarily remove current shift to check against OTHERS (can't conflict with self)
+                // Actually, best to just exclude self index
+                const otherShifts = tempShifts.filter((_, i) => i != idx);
+                
+                const conflict = this.checkConflicts({ name, startTime: start, endTime: end, days }, otherShifts);
+                if (conflict) { this.showNotification(conflict, 'error'); return; }
+
+                // Commit
+                this.editState[bhId][idx] = { name, startTime: start, endTime: end, days };
+                this.hasChanges[bhId] = true;
+                this.render();
+            });
+        }
+
+        // Shared HTML Builder for Edit Box
+        getShiftEditHTML(shift, isNew) {
+            const allDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+            return `
                 <div class="shift-edit-box">
                     <div class="edit-row">
                         <div class="form-group">
                             <span class="form-label">Name</span>
-                            <input type="text" class="edit-name" value="${shift.name || ''}" style="width:150px;">
+                            <input type="text" class="edit-name" value="${shift.name || ''}" style="width:180px;">
                         </div>
                         <div class="form-group">
                             <span class="form-label">Time Duration</span>
@@ -281,79 +369,40 @@
                         </div>
                     </div>
                     <div style="display:flex; justify-content:space-between; margin-top:5px;">
-                        <button class="btn btn-danger delete-shift-btn">Delete Shift</button>
+                        <button class="btn btn-danger delete-shift-btn">${isNew ? 'Cancel' : 'Delete Shift'}</button>
                         <div style="display:flex; gap:10px;">
                             <button class="btn btn-secondary cancel-edit-btn">Cancel</button>
                             <button class="btn btn-primary confirm-edit-btn">Done</button>
                         </div>
                     </div>
                 </div>`;
-
-            rowEl.insertAdjacentHTML('afterend', editHTML);
-            const editBox = rowEl.nextElementSibling;
-            rowEl.style.display = 'none';
-
-            editBox.querySelectorAll('.day-pill').forEach(t => {
-                t.addEventListener('click', (e) => {
-                    e.currentTarget.classList.toggle('selected');
-                    if(e.currentTarget.classList.contains('selected')) {
-                        e.currentTarget.innerHTML = `&#10003; ${e.currentTarget.dataset.day}`;
-                    } else {
-                        e.currentTarget.innerText = e.currentTarget.dataset.day;
-                    }
-                });
-            });
-
-            editBox.querySelector('.cancel-edit-btn').addEventListener('click', () => {
-                editBox.remove();
-                rowEl.style.display = 'grid';
-            });
-
-            editBox.querySelector('.delete-shift-btn').addEventListener('click', () => {
-                this.deleteShift(bhId, idx);
-            });
-
-            editBox.querySelector('.confirm-edit-btn').addEventListener('click', () => {
-                const name = editBox.querySelector('.edit-name').value;
-                const start = editBox.querySelector('.edit-start').value;
-                const end = editBox.querySelector('.edit-end').value;
-                const days = Array.from(editBox.querySelectorAll('.day-pill.selected')).map(el => el.dataset.day);
-
-                if (!name || days.length === 0) { alert("Name and at least one day required."); return; }
-                if (start >= end) { alert("Start time must be before end time."); return; }
-
-                // --- IMMEDIATE CONFLICT CHECK ---
-                // We must check this specific edited shift against all OTHER shifts
-                // We create a temporary array of what the shifts WOULD look like
-                const tempShifts = [...this.editState[bhId]];
-                tempShifts[idx] = { name, startTime: start, endTime: end, days };
-
-                const conflict = this.checkConflicts(tempShifts);
-                if (conflict) {
-                    alert(`Cannot save shift: ${conflict}`);
-                    return; // DO NOT close the edit box. Let user fix it.
-                }
-
-                // If valid, commit to state
-                this.editState[bhId][idx] = tempShifts[idx];
-                this.hasChanges[bhId] = true;
-                this.render();
-            });
         }
 
-        checkConflicts(shifts) {
-            const dayMap = {}; 
-            for (const s of shifts) {
-                const start = parseInt(s.startTime.replace(':', ''));
-                const end = parseInt(s.endTime.replace(':', ''));
-                for (const d of s.days) {
-                    if (!dayMap[d]) dayMap[d] = [];
-                    for (const ex of dayMap[d]) {
-                        if (start < ex.end && end > ex.start) {
-                            return `On ${d}, "${s.name}" overlaps with "${ex.name}".`;
-                        }
+        validateShift(name, start, end, days) {
+            if (!name) return "Name is required.";
+            if (days.length === 0) return "Select at least one day.";
+            if (!start || !end) return "Start and End times required.";
+            if (start >= end) return "Start time must be before End time.";
+            return null;
+        }
+
+        // Check a single shift candidate against a list of existing shifts
+        checkConflicts(candidate, existingShifts) {
+            const cStart = parseInt(candidate.startTime.replace(':', ''));
+            const cEnd = parseInt(candidate.endTime.replace(':', ''));
+
+            for (const day of candidate.days) {
+                // Find shifts on this specific day
+                const dayShifts = existingShifts.filter(s => s.days.includes(day));
+                
+                for (const existing of dayShifts) {
+                    const eStart = parseInt(existing.startTime.replace(':', ''));
+                    const eEnd = parseInt(existing.endTime.replace(':', ''));
+
+                    // Overlap logic: (StartA < EndB) and (EndA > StartB)
+                    if (cStart < eEnd && cEnd > eStart) {
+                        return `Overlap detected on ${day} with "${existing.name}"`;
                     }
-                    dayMap[d].push({ start, end, name: s.name });
                 }
             }
             return null; 
@@ -362,23 +411,14 @@
         async handleSaveBusinessHours(bhId, btnElement) {
             const originalText = btnElement.innerText;
             btnElement.disabled = true;
-            btnElement.innerText = "Checking...";
+            btnElement.innerText = "Saving...";
 
             const finalShifts = this.editState[bhId];
-            const conflict = this.checkConflicts(finalShifts);
-            if (conflict) {
-                this.showNotification(conflict, 'error');
-                btnElement.disabled = false;
-                btnElement.innerText = originalText;
-                return;
-            }
-
             const originalBh = this.data.businessHours.find(b => b.id === bhId);
             const payload = { ...originalBh, workingHours: finalShifts };
 
             try {
-                btnElement.innerText = "Saving...";
-                
+                // Try V2
                 const v2Url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/business-hours/${bhId}`;
                 let res = await fetch(v2Url, {
                     method: 'PUT',
@@ -386,8 +426,8 @@
                     body: JSON.stringify(payload)
                 });
 
+                // Fallback V1
                 if (res.status === 404) {
-                    console.warn('[GVM] V2 404. Retrying V1...');
                     const v1Url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/business-hours/${bhId}`;
                     res = await fetch(v1Url, {
                         method: 'PUT',
@@ -402,14 +442,12 @@
                 }
                 
                 originalBh.workingHours = JSON.parse(JSON.stringify(finalShifts));
-                this.hasChanges[bhId] = false;
-                this.showNotification(`Saved "${originalBh.name}" successfully`, 'success');
-                this.render(); 
+                this.hasChanges[bhId] = false; // Reset dirty state
+                this.showNotification(`Saved "${originalBh.name}"`, 'success');
+                this.render(); // Re-render to hide save bar
 
             } catch (err) {
-                console.error(err);
                 this.showNotification(`Save Failed: ${err.message}`, 'error');
-            } finally {
                 btnElement.disabled = false;
                 btnElement.innerText = originalText;
             }
