@@ -1,41 +1,33 @@
 /* styles/main.css */
-body {
-    font-family: "CiscoSans", "Helvetica Neue", Helvetica, Arial, sans-serif;
-    background-color: #f4f4f4;
-    color: #333;
-    padding: 20px;
-    margin: 0;
-}
-
 .gadget-container {
-    background: white;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
     padding: 20px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    font-family: "CiscoSans", Helvetica, Arial, sans-serif;
+    color: #333;
 }
 
 h2 {
-    color: #00bceb; /* Webex Blue */
+    color: #00bceb;
     margin-top: 0;
 }
 
 .data-row {
-    margin-bottom: 10px;
-    padding: 10px;
+    margin-bottom: 12px;
+    padding: 12px;
     background-color: #f9f9f9;
     border-left: 4px solid #00bceb;
+    border-radius: 4px;
 }
 
 .label {
     font-weight: bold;
     display: block;
-    font-size: 0.85em;
+    font-size: 0.85rem;
     color: #666;
+    margin-bottom: 4px;
 }
 
 .value {
     font-family: monospace;
     word-break: break-all;
-    cursor: help; /* Indicates hoverable text */
+    font-size: 0.95rem;
 }
