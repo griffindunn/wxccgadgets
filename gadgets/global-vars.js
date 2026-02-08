@@ -1,7 +1,7 @@
 /* gadgets/global-vars.js */
 (function() {
-    // Phase 6: Advanced Business Hours (Add/Edit/Delete + Conflict Checks)
-    const VERSION = "v2.7";
+    // Phase 6.1: Fix 404 Error on Save (Attribute Mismatch)
+    const VERSION = "v2.8";
     console.log(`Global Variable Manager ${VERSION} loading...`);
 
     const template = document.createElement('template');
@@ -34,8 +34,6 @@
                 businessHours: [] 
             };
 
-            // Holds temp state for editing a specific BH Schedule
-            // format: { [bhId]: [ { name, days:[], startTime, endTime }, ... ] }
             this.editState = {}; 
         }
 
@@ -111,7 +109,7 @@
             const json = await response.json();
             this.data.businessHours = json.data || [];
             
-            // Initialize Edit State (Deep Copy)
+            // Initialize Edit State
             this.editState = {};
             this.data.businessHours.forEach(bh => {
                 this.editState[bh.id] = JSON.parse(JSON.stringify(bh.workingHours || []));
@@ -144,7 +142,6 @@
             if (this.data.businessHours.length > 0) {
                 contentDiv.insertAdjacentHTML('beforeend', `<h3 class="category-header">Business Hours</h3>`);
                 this.data.businessHours.forEach(bh => {
-                    // Pass the *edit state* shifts, not the original ones, so UI updates instantly
                     const shifts = this.editState[bh.id] || [];
                     contentDiv.appendChild(this.buildBusinessHoursCard(bh, shifts));
                 });
@@ -220,29 +217,22 @@
             return card;
         }
 
-        // --- Event Listeners ---
         attachEventListeners(root) {
-            // Variable Saves
             root.querySelectorAll('.save-var-btn').forEach(b => b.addEventListener('click', e => this.handleSaveVariable(e.target.dataset.id, e.target)));
-            
-            // Business Hours Actions
             root.querySelectorAll('.add-shift-btn').forEach(b => b.addEventListener('click', e => this.addShift(e.target.dataset.bh)));
             root.querySelectorAll('.delete-shift-btn').forEach(b => b.addEventListener('click', e => this.deleteShift(e.target.dataset.bh, e.target.dataset.idx)));
             root.querySelectorAll('.edit-shift-btn').forEach(b => b.addEventListener('click', e => this.editShiftUI(e.target.dataset.bh, e.target.dataset.idx, e.target)));
             root.querySelectorAll('.save-bh-btn').forEach(b => b.addEventListener('click', e => this.handleSaveBusinessHours(e.target.dataset.bh, e.target)));
         }
 
-        // --- Business Hours Logic ---
-
         addShift(bhId) {
-            // Default new shift
             this.editState[bhId].push({
                 name: "New Shift",
                 days: ["MON", "TUE", "WED", "THU", "FRI"],
                 startTime: "09:00",
                 endTime: "17:00"
             });
-            this.render(); // Re-render to show the new item
+            this.render(); 
         }
 
         deleteShift(bhId, idx) {
@@ -253,7 +243,6 @@
         }
 
         editShiftUI(bhId, idx, btnEl) {
-            // Replace the "View" row with an "Edit" form inline
             const container = btnEl.closest('.shift-item');
             const shift = this.editState[bhId][idx];
             const allDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -263,7 +252,7 @@
                     <div class="edit-row">
                         <div class="edit-group">
                             <span class="edit-label">Name</span>
-                            <input type="text" class="edit-name" value="${shift.name}">
+                            <input type="text" class="edit-name" value="${shift.name || ''}">
                         </div>
                         <div class="edit-group">
                             <span class="edit-label">Start</span>
@@ -288,26 +277,20 @@
                 </div>
             `;
 
-            // Re-attach listeners for this temporary inline form
-            // We use shadowRoot querySelector because we just replaced HTML
             const editBox = this.shadowRoot.querySelector('.shift-edit-container');
             
-            // Toggle Days
             editBox.querySelectorAll('.day-toggle').forEach(t => {
                 t.addEventListener('click', (e) => {
                     e.target.classList.toggle('selected');
                 });
             });
 
-            // Confirm Edit
             editBox.querySelector('.confirm-edit-btn').addEventListener('click', () => {
-                // Gather Data
                 const newName = editBox.querySelector('.edit-name').value;
                 const newStart = editBox.querySelector('.edit-start').value;
                 const newEnd = editBox.querySelector('.edit-end').value;
                 const newDays = Array.from(editBox.querySelectorAll('.day-toggle.selected')).map(el => el.dataset.day);
 
-                // Basic Validation
                 if (!newName || newDays.length === 0) {
                     alert("Please provide a name and select at least one day.");
                     return;
@@ -317,7 +300,6 @@
                     return;
                 }
 
-                // Update State
                 this.editState[bhId][idx] = {
                     name: newName,
                     startTime: newStart,
@@ -325,13 +307,12 @@
                     days: newDays
                 };
 
-                this.render(); // Exit edit mode
+                this.render(); 
             });
         }
 
-        // --- Conflict Detection ---
         checkConflicts(shifts) {
-            const dayMap = {}; // { MON: [ {start: 900, end: 1700, name: "Shift 1"} ] }
+            const dayMap = {}; 
 
             for (const s of shifts) {
                 const start = parseInt(s.startTime.replace(':', ''));
@@ -339,9 +320,7 @@
 
                 for (const d of s.days) {
                     if (!dayMap[d]) dayMap[d] = [];
-                    // Check overlap
                     for (const existing of dayMap[d]) {
-                        // Logic: (StartA <= EndB) and (EndA >= StartB)
                         if (start < existing.end && end > existing.start) {
                             return `Conflict on ${d}: "${s.name}" overlaps with "${existing.name}"`;
                         }
@@ -349,19 +328,23 @@
                     dayMap[d].push({ start, end, name: s.name });
                 }
             }
-            return null; // No conflicts
+            return null; 
         }
-
-        // --- Save Handlers ---
 
         async handleSaveBusinessHours(bhId, btnElement) {
             const originalText = btnElement.innerText;
+            
+            if (!bhId) {
+                console.error("Save failed: Business Hour ID is missing from button.");
+                this.showNotification("Error: Missing ID", "error");
+                return;
+            }
+
             btnElement.disabled = true;
             btnElement.innerText = "Checking...";
 
             const finalShifts = this.editState[bhId];
 
-            // 1. Check for Conflicts
             const conflictError = this.checkConflicts(finalShifts);
             if (conflictError) {
                 this.showNotification(`Error: ${conflictError}`, 'error');
@@ -370,14 +353,12 @@
                 return;
             }
 
-            // 2. Prepare Payload
             const originalBh = this.data.businessHours.find(b => b.id === bhId);
             const payload = {
                 ...originalBh,
                 workingHours: finalShifts
             };
 
-            // 3. Send to API
             try {
                 btnElement.innerText = "Saving...";
                 const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/business-hours/${bhId}`;
@@ -389,7 +370,6 @@
 
                 if (!response.ok) throw new Error(`Status ${response.status}`);
                 
-                // Success: Update the main data source
                 originalBh.workingHours = JSON.parse(JSON.stringify(finalShifts));
                 this.showNotification(`Saved "${originalBh.name}"`, 'success');
 
@@ -402,7 +382,6 @@
         }
 
         async handleSaveVariable(varId, btnElement) {
-            // (Same variable save logic as before)
             const input = this.shadowRoot.getElementById(`input-${varId}`);
             let newValue = input.value;
             const originalText = btnElement.innerText;
@@ -433,11 +412,9 @@
             }
         }
 
-        // --- Helpers ---
         formatDays(days) {
             if (!days || days.length === 0) return 'No Days';
             if (days.length === 7) return 'Every Day';
-            // Sort days
             const map = {SUN:0, MON:1, TUE:2, WED:3, THU:4, FRI:5, SAT:6};
             const sorted = [...days].sort((a,b) => map[a] - map[b]);
             return sorted.map(d => d.substring(0,3)).join(', ');
