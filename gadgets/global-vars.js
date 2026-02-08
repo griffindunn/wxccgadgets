@@ -1,14 +1,14 @@
 /* gadgets/global-vars.js */
 (function() {
-    // Phase 13: CSS Layout Fixes (Horizontal Resize & BH Auto-Width)
-    const VERSION = "v3.6";
+    // Phase 14: Dark Mode Support + Layout Limits
+    const VERSION = "v3.7";
     console.log(`Global Variable Manager ${VERSION} loading...`);
 
     const template = document.createElement('template');
     template.innerHTML = `
       <style>@import url('https://griffindunn.github.io/wxccgadgets/styles/main.css');</style>
       <div id="app">
-          <div id="debug-info" style="font-size: 0.8em; color: #888; margin-bottom: 10px; display: none;"></div>
+          <div id="debug-info" style="font-size: 0.8em; color: var(--text-desc); margin-bottom: 10px; display: none;"></div>
           <div id="content"></div>
       </div>
       <div id="toast">Notification</div>
@@ -67,7 +67,7 @@
                 this.render();
             } catch (err) {
                 console.error('[GVM] Load failed:', err);
-                contentDiv.innerHTML = `<div style="color:red">Error loading data: ${err.message}</div>`;
+                contentDiv.innerHTML = `<div style="color:var(--color-danger)">Error loading data: ${err.message}</div>`;
             }
         }
 
@@ -314,7 +314,7 @@
 
                     const confirmHtml = `
                         <div class="delete-confirm-view">
-                            <div style="margin-bottom: 15px; font-weight:600; color:#444;">Are you sure you want to delete this shift?</div>
+                            <div style="margin-bottom: 15px; font-weight:600; color: var(--text-main);">Are you sure you want to delete this shift?</div>
                             <div style="display:flex; justify-content:center; gap:10px;">
                                 <button class="btn btn-secondary cancel-del-btn">No, Keep it</button>
                                 <button class="btn btn-danger confirm-del-btn">Yes, Delete</button>
@@ -398,7 +398,7 @@
                                 `).join('')}
                             </div>
                         </div>
-                        <div style="display:flex; justify-content:space-between; margin-top:15px; border-top: 1px solid #eee; padding-top: 10px;">
+                        <div style="display:flex; justify-content:space-between; margin-top:15px; border-top: 1px solid var(--border-light); padding-top: 10px;">
                             ${deleteBtnHtml}
                             <div style="display:flex; gap:10px;">
                                 <button class="btn btn-secondary cancel-edit-btn">Cancel</button>
