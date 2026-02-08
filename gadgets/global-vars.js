@@ -1,7 +1,7 @@
 /* gadgets/global-vars.js */
 (function() {
-    // Phase 6.2: Fix 404 via API Fallback + Control Hub UI Styling
-    const VERSION = "v2.9";
+    // Phase 7: Control Hub Layout (Day Groups + Smart Save)
+    const VERSION = "v3.0";
     console.log(`Global Variable Manager ${VERSION} loading...`);
 
     const template = document.createElement('template');
@@ -24,7 +24,8 @@
             
             this.ctx = { token: null, orgId: null, region: null, baseUrl: null };
             this.data = { variables: [], businessHours: [] };
-            this.editState = {}; // Stores temp edits for Business Hours
+            this.editState = {}; 
+            this.hasChanges = {}; // Track dirty state per Business Hour ID
         }
 
         static get observedAttributes() { return ['token', 'org-id', 'data-center']; }
@@ -86,10 +87,11 @@
             const json = await res.json();
             this.data.businessHours = json.data || [];
             
-            // Init Edit State (Deep Copy)
             this.editState = {};
+            this.hasChanges = {};
             this.data.businessHours.forEach(bh => {
                 this.editState[bh.id] = JSON.parse(JSON.stringify(bh.workingHours || []));
+                this.hasChanges[bh.id] = false;
             });
         }
 
@@ -97,7 +99,7 @@
             const contentDiv = this.shadowRoot.getElementById('content');
             contentDiv.innerHTML = '';
 
-            // 1. Render Variables
+            // 1. Variables
             const vars = [...this.data.variables].sort((a, b) => {
                 if (a.variableType < b.variableType) return -1;
                 if (a.variableType > b.variableType) return 1;
@@ -114,12 +116,13 @@
                 contentDiv.insertAdjacentHTML('beforeend', this.buildVariableCard(v));
             });
 
-            // 2. Render Business Hours
+            // 2. Business Hours
             if (this.data.businessHours.length > 0) {
                 contentDiv.insertAdjacentHTML('beforeend', `<h3 class="category-header">Business Hours</h3>`);
                 this.data.businessHours.forEach(bh => {
                     const shifts = this.editState[bh.id] || [];
-                    contentDiv.appendChild(this.buildBusinessHoursCard(bh, shifts));
+                    const isDirty = this.hasChanges[bh.id];
+                    contentDiv.appendChild(this.buildBusinessHoursCard(bh, shifts, isDirty));
                 });
             }
 
@@ -148,24 +151,45 @@
                 </div>`;
         }
 
-        buildBusinessHoursCard(bh, shifts) {
+        // --- NEW: Group Shifts by Day ---
+        buildBusinessHoursCard(bh, shifts, isDirty) {
             const card = document.createElement('div');
             card.className = 'bh-card';
             
-            const shiftsHtml = shifts.map((shift, idx) => `
-                <div class="shift-item">
-                    <div class="shift-main">
-                        <span class="shift-name-text">${shift.name || 'Unnamed Shift'}</span>
-                        <span class="shift-details">
-                            ${this.formatDays(shift.days)} • ${this.formatTime(shift.startTime)} - ${this.formatTime(shift.endTime)}
-                        </span>
+            const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+            const shortDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+            
+            let daysHtml = '';
+
+            // Group shifts by day
+            daysOfWeek.forEach((dayName, dayIndex) => {
+                const dayCode = shortDays[dayIndex];
+                
+                // Find all shifts active on this day
+                const activeShifts = shifts
+                    .map((s, idx) => ({ ...s, originalIndex: idx })) // Keep track of array index
+                    .filter(s => s.days.includes(dayCode))
+                    .sort((a, b) => a.startTime.localeCompare(b.startTime)); // Sort by time
+
+                let rowsHtml = '';
+                if (activeShifts.length === 0) {
+                    rowsHtml = `<div class="shift-empty">No Shifts</div>`;
+                } else {
+                    rowsHtml = activeShifts.map(s => `
+                        <div class="shift-row" data-bh="${bh.id}" data-idx="${s.originalIndex}">
+                            <div class="shift-row-name">${s.name}</div>
+                            <div class="shift-row-time">${this.formatTime(s.startTime)} - ${this.formatTime(s.endTime)}</div>
+                        </div>
+                    `).join('');
+                }
+
+                daysHtml += `
+                    <div class="bh-day-group">
+                        <div class="bh-day-name">${dayName}</div>
+                        <div class="bh-day-shifts">${rowsHtml}</div>
                     </div>
-                    <div style="display:flex;gap:8px;">
-                        <button class="btn btn-secondary edit-shift-btn" data-bh="${bh.id}" data-idx="${idx}">Edit</button>
-                        <button class="btn btn-danger delete-shift-btn" data-bh="${bh.id}" data-idx="${idx}">Delete</button>
-                    </div>
-                </div>
-            `).join('');
+                `;
+            });
 
             card.innerHTML = `
                 <div class="bh-header">
@@ -173,13 +197,13 @@
                         <div class="bh-title">${bh.name}</div>
                         ${bh.description ? `<div class="var-desc">${bh.description}</div>` : ''}
                     </div>
-                    <button class="btn btn-primary add-shift-btn" data-bh="${bh.id}">Add Shift</button>
+                    <button class="btn btn-black add-shift-btn" data-bh="${bh.id}">Add Shift</button>
                 </div>
                 <div class="bh-content">
-                    ${shifts.length ? shiftsHtml : '<div style="color:#999;font-style:italic;">No shifts defined.</div>'}
-                    <div style="text-align:right; border-top:1px solid #eee; padding-top:15px;">
-                        <button class="btn btn-primary save-bh-btn" data-bh="${bh.id}">Save All Changes</button>
-                    </div>
+                    ${daysHtml}
+                </div>
+                <div class="bh-save-bar ${isDirty ? 'visible' : ''}">
+                    <button class="btn btn-primary save-bh-btn" data-bh="${bh.id}">Save All Changes</button>
                 </div>`;
             return card;
         }
@@ -187,32 +211,40 @@
         attachEventListeners(root) {
             root.querySelectorAll('.save-var-btn').forEach(b => b.addEventListener('click', e => this.handleSaveVariable(e.target.dataset.id, e.target)));
             root.querySelectorAll('.add-shift-btn').forEach(b => b.addEventListener('click', e => this.addShift(e.target.dataset.bh)));
-            root.querySelectorAll('.delete-shift-btn').forEach(b => b.addEventListener('click', e => this.deleteShift(e.target.dataset.bh, e.target.dataset.idx)));
-            root.querySelectorAll('.edit-shift-btn').forEach(b => b.addEventListener('click', e => this.editShiftUI(e.target.dataset.bh, e.target.dataset.idx, e.target)));
             root.querySelectorAll('.save-bh-btn').forEach(b => b.addEventListener('click', e => this.handleSaveBusinessHours(e.target.dataset.bh, e.target)));
+            
+            // Click-to-Edit Logic
+            root.querySelectorAll('.shift-row').forEach(row => {
+                row.addEventListener('click', e => {
+                    // Prevent opening multiple edit boxes for the same click
+                    if(row.nextElementSibling && row.nextElementSibling.classList.contains('shift-edit-box')) return;
+                    this.openEditShiftUI(e.currentTarget.dataset.bh, e.currentTarget.dataset.idx, e.currentTarget);
+                });
+            });
         }
 
         addShift(bhId) {
             this.editState[bhId].push({
                 name: "New Shift", days: ["MON", "TUE", "WED", "THU", "FRI"], startTime: "09:00", endTime: "17:00"
             });
+            this.hasChanges[bhId] = true; // Mark dirty
             this.render();
         }
 
         deleteShift(bhId, idx) {
             if(confirm("Delete this shift?")) {
                 this.editState[bhId].splice(idx, 1);
+                this.hasChanges[bhId] = true; // Mark dirty
                 this.render();
             }
         }
 
-        editShiftUI(bhId, idx, btnEl) {
-            const container = btnEl.closest('.shift-item');
+        openEditShiftUI(bhId, idx, rowEl) {
             const shift = this.editState[bhId][idx];
             const allDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
-            // Inline Edit Form mimicking a modal
-            container.outerHTML = `
+            // Create Edit Box
+            const editHTML = `
                 <div class="shift-edit-box">
                     <div class="edit-row">
                         <div class="form-group">
@@ -230,7 +262,7 @@
                     </div>
                     <div class="form-group">
                         <span class="form-label">Days Active</span>
-                        <div class="edit-days-container">
+                        <div class="day-pills">
                             ${allDays.map(d => `
                                 <div class="day-pill ${shift.days.includes(d) ? 'selected' : ''}" data-day="${d}">
                                     ${shift.days.includes(d) ? '&#10003;' : ''} ${d}
@@ -238,20 +270,26 @@
                             `).join('')}
                         </div>
                     </div>
-                    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:5px;">
-                        <button class="btn btn-secondary cancel-edit-btn">Cancel</button>
-                        <button class="btn btn-primary confirm-edit-btn">Done</button>
+                    <div style="display:flex; justify-content:space-between; margin-top:5px;">
+                        <button class="btn btn-danger delete-shift-btn">Delete Shift</button>
+                        <div style="display:flex; gap:10px;">
+                            <button class="btn btn-secondary cancel-edit-btn">Cancel</button>
+                            <button class="btn btn-primary confirm-edit-btn">Done</button>
+                        </div>
                     </div>
                 </div>`;
 
-            // Re-select because DOM changed
-            const editBox = this.shadowRoot.querySelector('.shift-edit-box');
+            // Insert after the clicked row
+            rowEl.insertAdjacentHTML('afterend', editHTML);
+            const editBox = rowEl.nextElementSibling;
             
-            // Toggle Days Logic
+            // Hide the original row temporarily
+            rowEl.style.display = 'none';
+
+            // --- Handlers ---
             editBox.querySelectorAll('.day-pill').forEach(t => {
                 t.addEventListener('click', (e) => {
                     e.currentTarget.classList.toggle('selected');
-                    // Toggle checkmark visual
                     if(e.currentTarget.classList.contains('selected')) {
                         e.currentTarget.innerHTML = `&#10003; ${e.currentTarget.dataset.day}`;
                     } else {
@@ -260,7 +298,14 @@
                 });
             });
 
-            editBox.querySelector('.cancel-edit-btn').addEventListener('click', () => this.render());
+            editBox.querySelector('.cancel-edit-btn').addEventListener('click', () => {
+                editBox.remove();
+                rowEl.style.display = 'grid'; // Show row again
+            });
+
+            editBox.querySelector('.delete-shift-btn').addEventListener('click', () => {
+                this.deleteShift(bhId, idx);
+            });
 
             editBox.querySelector('.confirm-edit-btn').addEventListener('click', () => {
                 const name = editBox.querySelector('.edit-name').value;
@@ -272,11 +317,11 @@
                 if (start >= end) { alert("Start time must be before end time."); return; }
 
                 this.editState[bhId][idx] = { name, startTime: start, endTime: end, days };
-                this.render();
+                this.hasChanges[bhId] = true; // Mark dirty
+                this.render(); // Re-render to update UI and close edit box
             });
         }
 
-        // --- Conflict Detection ---
         checkConflicts(shifts) {
             const dayMap = {}; 
             for (const s of shifts) {
@@ -295,7 +340,6 @@
             return null; 
         }
 
-        // --- Save Handlers (With Fallback) ---
         async handleSaveBusinessHours(bhId, btnElement) {
             const originalText = btnElement.innerText;
             btnElement.disabled = true;
@@ -324,9 +368,9 @@
                     body: JSON.stringify(payload)
                 });
 
-                // Fallback to V1 if V2 returns 404
+                // Fallback to V1
                 if (res.status === 404) {
-                    console.warn('[GVM] V2 Endpoint returned 404. Retrying with legacy V1 endpoint...');
+                    console.warn('[GVM] V2 404. Retrying V1...');
                     const v1Url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/business-hours/${bhId}`;
                     res = await fetch(v1Url, {
                         method: 'PUT',
@@ -341,7 +385,9 @@
                 }
                 
                 originalBh.workingHours = JSON.parse(JSON.stringify(finalShifts));
+                this.hasChanges[bhId] = false; // Reset dirty flag
                 this.showNotification(`Saved "${originalBh.name}" successfully`, 'success');
+                this.render(); // Re-render to hide save bar
 
             } catch (err) {
                 console.error(err);
@@ -352,6 +398,7 @@
             }
         }
 
+        // (Previous Variable Save Logic remains unchanged...)
         async handleSaveVariable(varId, btnElement) {
             const input = this.shadowRoot.getElementById(`input-${varId}`);
             let newValue = input.value;
