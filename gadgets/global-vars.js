@@ -1,29 +1,37 @@
 /* gadgets/global-vars.js */
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Identify where we want to display the data
     const displayArea = document.getElementById('gadget-content');
-
-    // 2. Parse the Query Parameters (passed from the Layout JSON)
+    
+    // Parse the data passed in the URL (The $STORE variables)
     const urlParams = new URLSearchParams(window.location.search);
     
-    // 3. Extract the specific fields you requested
-    // Note: These key names must match what you put in the JSON layout later
+    // Map the URL parameters to friendly names
     const data = {
-        token: urlParams.get('token') || 'Not Provided',
-        orgId: urlParams.get('orgId') || 'Not Provided',
-        region: urlParams.get('region') || 'Not Provided'
+        "Access Token": urlParams.get('token') || 'Not Found',
+        "Organization ID": urlParams.get('orgId') || 'Not Found',
+        "Region / Datacenter": urlParams.get('region') || 'Not Found'
     };
 
-    // 4. Render the data to the DOM
-    let htmlContent = '<h2>Global Variables Supervisor Gadget</h2>';
-    htmlContent += '<p>Connection verified. Receiving the following context:</p>';
+    let htmlContent = '<h2>WxCC Global Variables</h2>';
+    
+    // Check if we actually got data (length check on token is a simple validation)
+    if (data["Access Token"].length < 10 && data["Access Token"] !== 'Not Found') {
+         htmlContent += '<p style="color:red">Warning: Token appears invalid. Ensure $STORE vars are set in Layout JSON.</p>';
+    }
 
-    for (const [key, value] of Object.entries(data)) {
+    // Loop through and display
+    for (const [label, value] of Object.entries(data)) {
+        // Truncate the token for display purposes if it's too long
+        let displayValue = value;
+        if (label === "Access Token" && value.length > 50) {
+            displayValue = value.substring(0, 40) + "... (truncated)";
+        }
+
         htmlContent += `
             <div class="data-row">
-                <span class="label">${key.toUpperCase()}</span>
-                <span class="value">${value}</span>
+                <span class="label">${label.toUpperCase()}</span>
+                <span class="value" title="${value}">${displayValue}</span>
             </div>
         `;
     }
