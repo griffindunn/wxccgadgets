@@ -37,4 +37,5 @@ h2 {
 .value {
     font-family: monospace;
     word-break: break-all;
+    cursor: help; /* Indicates hoverable text */
 }
