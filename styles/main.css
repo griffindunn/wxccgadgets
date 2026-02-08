@@ -22,7 +22,6 @@ h3.category-header {
     letter-spacing: 1px;
 }
 
-/* CHANGED to FLEXBOX to allow wrapping when boxes expand */
 #content {
     display: flex;
     flex-wrap: wrap;
@@ -38,33 +37,30 @@ h3.category-header {
     border-radius: 8px;
     padding: 16px;
     display: flex;
-    /* CHANGED: Align top so large text boxes don't center the label vertically */
     align-items: flex-start; 
     transition: box-shadow 0.2s;
-    /* CHANGED: Flex basis allows it to sit side-by-side but wrap if too wide */
-    flex: 1 1 500px;
+    
+    /* UPDATED: Flex-shrink 0 forces wrapping instead of squishing */
+    flex: 1 0 auto; 
     min-width: 300px;
 }
 .var-row:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
 
 .var-info { 
-    flex: 0 0 150px; /* Fixed label width prevents crushing */
+    flex: 0 0 150px; 
     margin-right: 20px; 
-    /* CHANGED: Push down slightly to align with input text */
     margin-top: 8px; 
 }
 .var-name { font-weight: 600; color: #333; font-size: 0.95rem; margin-bottom: 4px; display: block;}
 .var-desc { font-size: 0.8rem; color: #777; line-height: 1.4; }
 
-/* UPDATED: Input container expands to fill the card */
 .var-input-container { 
     display: flex; 
     gap: 8px; 
     align-items: flex-start;
-    flex: 1; /* Take all remaining space */
+    flex: 1; 
 }
 
-/* UPDATED: Inputs carry width 100% to fill container, max-width to prevent overflow */
 textarea.var-input { 
     width: 100%; 
     padding: 8px; 
@@ -72,7 +68,7 @@ textarea.var-input {
     border-radius: 4px; 
     font: inherit; 
     min-height: 38px;
-    resize: both; /* User can drag this */
+    resize: both; 
     box-sizing: border-box;
 }
 
@@ -89,8 +85,10 @@ select {
 .bh-card {
     display: flex; flex-direction: column;
     background: #fff; border: 1px solid #dcdcdc; border-radius: 8px; overflow: hidden;
-    /* Allow BH card to wrap and take full width */
-    flex: 1 1 100%; 
+    
+    /* UPDATED: flex 0 0 auto prevents auto-stretch, keeping them side-by-side */
+    flex: 0 0 auto; 
+    min-width: 450px;
 }
 .bh-header {
     background: #fcfcfc; padding: 15px 20px; border-bottom: 1px solid #eee;
