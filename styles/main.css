@@ -7,6 +7,7 @@
     overflow-y: auto;
     padding: 20px;
     box-sizing: border-box;
+    position: relative; /* For footer positioning */
 }
 
 h2 {
@@ -16,90 +17,153 @@ h2 {
 }
 
 h3.category-header {
-    /* Headers span the full width of the grid */
     grid-column: 1 / -1;
-    margin-top: 25px;
+    margin-top: 30px;
     margin-bottom: 10px;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     text-transform: uppercase;
-    color: #666;
-    border-bottom: 2px solid #eee;
+    color: #888;
+    border-bottom: 1px solid #eee;
     padding-bottom: 5px;
-    letter-spacing: 1px;
+    letter-spacing: 1.5px;
 }
 
-/* The Grid Container */
+/* Grid Container */
 #content {
     display: grid;
-    /* This automatically fits as many 450px cards as possible per row */
-    grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
-    gap: 15px; /* Space between cards */
-    align-items: start; /* Prevents cards from stretching vertically unnecessarily */
+    grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+    gap: 15px;
+    align-items: start;
+    padding-bottom: 30px; /* Space for footer */
 }
 
-/* The Gray "Card" Box */
+/* --- Card Styling --- */
 .var-row {
     background: #f9f9f9;
     border: 1px solid #e0e0e0;
-    border-radius: 4px;
-    padding: 10px 15px;
-    /* Flexbox allows the content inside to wrap if needed */
+    border-radius: 6px;
+    padding: 12px 15px;
     display: flex;
-    flex-wrap: wrap; 
-    align-items: flex-start; /* Align to top so expanding text box doesn't center label */
-    transition: background-color 0.2s, box-shadow 0.2s;
-    height: auto; /* Ensures box grows when text box expands */
+    flex-wrap: wrap;
+    align-items: flex-start;
+    transition: all 0.2s;
 }
 
 .var-row:hover {
     background-color: #f0faff;
     border-color: #bce0fd;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
 }
 
 .var-info {
     width: 200px;
     flex-shrink: 0;
     margin-right: 15px;
-    padding-top: 8px; /* Align text with the top of the input/textarea */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-top: 6px; /* Visual alignment with inputs */
 }
 
 .var-name {
     font-weight: 600;
-    display: block;
     color: #333;
     font-size: 0.9rem;
-    word-break: break-word; /* Wrap long variable names */
+    word-break: break-word;
+}
+
+.var-desc {
+    font-size: 0.75rem;
+    color: #777;
+    margin-top: 4px;
+    font-style: italic;
+    line-height: 1.3;
 }
 
 .var-input-container {
-    flex-grow: 1; /* Allow input area to fill remaining space */
+    flex-grow: 1;
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    min-width: 0; /* Prevents flexbox overflow issues */
+    min-width: 0;
 }
 
 /* Inputs & Textareas */
-textarea, select {
+textarea, select, input[type="text"], input[type="time"] {
     padding: 8px;
     border: 1px solid #ccc;
     border-radius: 4px;
     font-size: 13px;
     font-family: inherit;
-    width: 100%; /* Fill the container space */
     box-sizing: border-box;
 }
 
-textarea {
-    resize: both; /* Allow resizing (vertical & horizontal) */
-    min-height: 36px; /* Start looking like a single line input */
+/* Variable Textareas */
+textarea.var-input {
+    width: 100%;
+    resize: both;
+    min-height: 38px;
     line-height: 1.4;
-    white-space: pre-wrap; /* Preserve line breaks */
+    white-space: pre-wrap;
 }
 
-select {
-    height: 36px; /* Match textarea min-height */
+select { height: 38px; width: 100%; }
+
+/* --- Business Hours Specifics --- */
+.bh-card {
+    flex-direction: column; /* Stack vertically */
+    gap: 10px;
+}
+
+.bh-header {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 8px;
+}
+
+.bh-shifts-container {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.bh-shift-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #fff;
+    border: 1px solid #eee;
+    padding: 8px;
+    border-radius: 4px;
+}
+
+.bh-days {
+    display: flex;
+    gap: 4px;
+    font-size: 0.7rem;
+    color: #555;
+    flex-wrap: wrap;
+    width: 140px; /* Fixed width for day toggles */
+}
+
+.bh-day-check {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+}
+
+.bh-time-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8rem;
+    color: #666;
 }
 
 /* Buttons */
@@ -107,20 +171,32 @@ button {
     background-color: #00bceb;
     color: white;
     border: none;
-    padding: 8px 16px;
-    border-radius: 18px;
+    padding: 0 16px;
+    height: 38px; /* Match input height */
+    border-radius: 19px;
     cursor: pointer;
     font-weight: 600;
     font-size: 12px;
-    white-space: nowrap; /* Prevent "Save" text wrapping */
-    height: 36px; /* Align height with inputs */
+    white-space: nowrap;
     transition: background-color 0.2s;
 }
 
 button:hover { background-color: #00a0c6; }
 button:disabled { background-color: #ccc; cursor: not-allowed; }
 
-/* Notification Toast */
+/* Version Footer */
+.footer-version {
+    position: fixed;
+    bottom: 5px;
+    left: 10px;
+    font-size: 11px;
+    color: #e0e0e0; /* Very light gray */
+    pointer-events: none;
+    z-index: 100;
+    font-family: monospace;
+}
+
+/* Toast */
 #toast {
     visibility: hidden;
     min-width: 250px;
