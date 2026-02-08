@@ -7,7 +7,7 @@
     overflow-y: auto;
     padding: 20px;
     box-sizing: border-box;
-    position: relative; /* For footer positioning */
+    position: relative;
 }
 
 h2 {
@@ -31,13 +31,13 @@ h3.category-header {
 /* Grid Container */
 #content {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
     gap: 15px;
     align-items: start;
-    padding-bottom: 30px; /* Space for footer */
+    padding-bottom: 30px;
 }
 
-/* --- Card Styling --- */
+/* --- Variable Card Styling --- */
 .var-row {
     background: #f9f9f9;
     border: 1px solid #e0e0e0;
@@ -47,6 +47,7 @@ h3.category-header {
     flex-wrap: wrap;
     align-items: flex-start;
     transition: all 0.2s;
+    position: relative;
 }
 
 .var-row:hover {
@@ -62,7 +63,7 @@ h3.category-header {
     display: flex;
     flex-direction: column;
     justify-content: center;
-    padding-top: 6px; /* Visual alignment with inputs */
+    padding-top: 6px;
 }
 
 .var-name {
@@ -98,7 +99,6 @@ textarea, select, input[type="text"], input[type="time"] {
     box-sizing: border-box;
 }
 
-/* Variable Textareas */
 textarea.var-input {
     width: 100%;
     resize: both;
@@ -109,10 +109,10 @@ textarea.var-input {
 
 select { height: 38px; width: 100%; }
 
-/* --- Business Hours Specifics --- */
+/* --- Business Hours Specifics (Redesigned) --- */
 .bh-card {
-    flex-direction: column; /* Stack vertically */
-    gap: 10px;
+    flex-direction: column;
+    gap: 15px;
 }
 
 .bh-header {
@@ -120,50 +120,103 @@ select { height: 38px; width: 100%; }
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 8px;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 10px;
 }
 
-.bh-shifts-container {
+.bh-list {
     width: 100%;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
 }
 
-.bh-shift-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+/* Individual Shift Row (View Mode) */
+.shift-item {
     background: #fff;
-    border: 1px solid #eee;
-    padding: 8px;
-    border-radius: 4px;
-}
-
-.bh-days {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 10px;
     display: flex;
-    gap: 4px;
-    font-size: 0.7rem;
-    color: #555;
-    flex-wrap: wrap;
-    width: 140px; /* Fixed width for day toggles */
+    justify-content: space-between;
+    align-items: center;
 }
 
-.bh-day-check {
+.shift-info {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    cursor: pointer;
+    gap: 4px;
 }
 
-.bh-time-group {
-    display: flex;
-    align-items: center;
-    gap: 4px;
+.shift-name {
+    font-weight: bold;
+    color: #00bceb;
+    font-size: 0.95rem;
+}
+
+.shift-details {
     font-size: 0.8rem;
     color: #666;
+}
+
+/* Edit Mode Container */
+.shift-edit-container {
+    background: #fff;
+    border: 1px solid #00bceb; /* Highlight active edit */
+    border-radius: 6px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.edit-row {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.edit-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.edit-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #555;
+}
+
+/* Day Selection Toggles */
+.day-toggles {
+    display: flex;
+    gap: 5px;
+}
+
+.day-toggle {
+    width: 32px;
+    height: 32px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #f5f5f5;
+    color: #666;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s;
+}
+
+.day-toggle.selected {
+    background-color: #00bceb;
+    color: white;
+    border-color: #00bceb;
+    font-weight: bold;
 }
 
 /* Buttons */
@@ -172,8 +225,8 @@ button {
     color: white;
     border: none;
     padding: 0 16px;
-    height: 38px; /* Match input height */
-    border-radius: 19px;
+    height: 36px;
+    border-radius: 18px;
     cursor: pointer;
     font-weight: 600;
     font-size: 12px;
@@ -184,19 +237,39 @@ button {
 button:hover { background-color: #00a0c6; }
 button:disabled { background-color: #ccc; cursor: not-allowed; }
 
-/* Version Footer */
+button.secondary-btn {
+    background-color: transparent;
+    color: #666;
+    border: 1px solid #ccc;
+}
+button.secondary-btn:hover {
+    background-color: #eee;
+    color: #333;
+}
+
+button.danger-btn {
+    background-color: #e53935;
+}
+button.danger-btn:hover { background-color: #c62828; }
+
+button.sm-btn {
+    height: 28px;
+    padding: 0 12px;
+    font-size: 11px;
+}
+
+/* Footer & Toast */
 .footer-version {
     position: fixed;
     bottom: 5px;
     left: 10px;
     font-size: 11px;
-    color: #e0e0e0; /* Very light gray */
+    color: #ccc;
     pointer-events: none;
     z-index: 100;
     font-family: monospace;
 }
 
-/* Toast */
 #toast {
     visibility: hidden;
     min-width: 250px;
