@@ -1,7 +1,7 @@
 /* gadgets/global-vars.js */
 (function() {
-    // Phase 12: Remove Duplicate Header + Flexbox Layout Fixes
-    const VERSION = "v3.5";
+    // Phase 13: CSS Layout Fixes (Horizontal Resize & BH Auto-Width)
+    const VERSION = "v3.6";
     console.log(`Global Variable Manager ${VERSION} loading...`);
 
     const template = document.createElement('template');
