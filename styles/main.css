@@ -9,15 +9,8 @@
     box-sizing: border-box;
 }
 
-h2 {
-    color: #00bceb;
-    margin-top: 0;
-    margin-bottom: 25px;
-    font-weight: 300;
-}
-
 h3.category-header {
-    grid-column: 1 / -1;
+    width: 100%; /* Force new line in flex wrap */
     margin-top: 30px;
     margin-bottom: 15px;
     font-size: 0.8rem;
@@ -29,11 +22,12 @@ h3.category-header {
     letter-spacing: 1px;
 }
 
+/* CHANGED to FLEXBOX to allow wrapping when boxes expand */
 #content {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
     gap: 20px;
-    align-items: start;
+    align-items: flex-start;
     padding-bottom: 40px;
 }
 
@@ -44,35 +38,46 @@ h3.category-header {
     border-radius: 8px;
     padding: 16px;
     display: flex;
-    align-items: center;
+    /* CHANGED: Align top so large text boxes don't center the label vertically */
+    align-items: flex-start; 
     transition: box-shadow 0.2s;
+    /* CHANGED: Flex basis allows it to sit side-by-side but wrap if too wide */
+    flex: 1 1 500px;
+    min-width: 300px;
 }
 .var-row:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
 
-.var-info { flex: 1; margin-right: 20px; }
+.var-info { 
+    flex: 0 0 150px; /* Fixed label width prevents crushing */
+    margin-right: 20px; 
+    /* CHANGED: Push down slightly to align with input text */
+    margin-top: 8px; 
+}
 .var-name { font-weight: 600; color: #333; font-size: 0.95rem; margin-bottom: 4px; display: block;}
 .var-desc { font-size: 0.8rem; color: #777; line-height: 1.4; }
 
-/* UPDATED: Input container is flexible to allow textarea resizing */
+/* UPDATED: Input container expands to fill the card */
 .var-input-container { 
     display: flex; 
     gap: 8px; 
-    align-items: center; 
+    align-items: flex-start;
+    flex: 1; /* Take all remaining space */
 }
 
-/* UPDATED: Inputs carry the width and allow both direction resizing */
+/* UPDATED: Inputs carry width 100% to fill container, max-width to prevent overflow */
 textarea.var-input { 
-    width: 240px; 
+    width: 100%; 
     padding: 8px; 
     border: 1px solid #ccc; 
     border-radius: 4px; 
     font: inherit; 
     min-height: 38px;
-    resize: both; /* Allows left/right/up/down */
+    resize: both; /* User can drag this */
+    box-sizing: border-box;
 }
 
 select { 
-    width: 240px; 
+    width: 100%; 
     padding: 8px; 
     border: 1px solid #ccc; 
     border-radius: 4px; 
@@ -84,6 +89,8 @@ select {
 .bh-card {
     display: flex; flex-direction: column;
     background: #fff; border: 1px solid #dcdcdc; border-radius: 8px; overflow: hidden;
+    /* Allow BH card to wrap and take full width */
+    flex: 1 1 100%; 
 }
 .bh-header {
     background: #fcfcfc; padding: 15px 20px; border-bottom: 1px solid #eee;
