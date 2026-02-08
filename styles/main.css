@@ -1,7 +1,9 @@
 /* styles/main.css */
 
-/* Define Color Variables for Light/Dark Mode Support */
+/* Define Color Variables */
 :host {
+    color-scheme: light dark; /* Ensures scrollbars/controls adjust to theme */
+    
     /* Default (Light Mode) */
     --bg-app: #fff;
     --bg-card: #fff;
@@ -61,6 +63,13 @@
     box-sizing: border-box;
 }
 
+h2 {
+    color: var(--color-primary);
+    margin-top: 0;
+    margin-bottom: 25px;
+    font-weight: 300;
+}
+
 h3.category-header {
     width: 100%;
     margin-top: 30px;
@@ -92,10 +101,10 @@ h3.category-header {
     align-items: flex-start; 
     transition: box-shadow 0.2s;
     
-    /* UPDATED: Flex-shrink 0 forces wrapping. Max-width prevents infinite stretch */
-    flex: 1 0 auto; 
+    /* UPDATED: flex: 0 0 auto stops automatic growth, but auto allows resize */
+    flex: 0 0 auto; 
     min-width: 300px;
-    max-width: 600px; /* Prevents single orphan items from filling the whole screen */
+    /* max-width removed to allow manual expansion */
 }
 .var-row:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
 
@@ -252,7 +261,6 @@ select {
 
 .btn-black { background: #222; color: white; }
 .btn-black:hover { background: #000; }
-/* In dark mode, 'black' button should probably be lighter/accent or just kept black if high contrast */
 @media (prefers-color-scheme: dark) {
     .btn-black { background: #444; }
     .btn-black:hover { background: #555; }
