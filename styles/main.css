@@ -53,8 +53,32 @@ h3.category-header {
 .var-name { font-weight: 600; color: #333; font-size: 0.95rem; margin-bottom: 4px; display: block;}
 .var-desc { font-size: 0.8rem; color: #777; line-height: 1.4; }
 
-.var-input-container { width: 240px; display: flex; gap: 8px; align-items: center; }
-textarea.var-input, select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font: inherit; min-height: 38px; }
+/* UPDATED: Input container is flexible to allow textarea resizing */
+.var-input-container { 
+    display: flex; 
+    gap: 8px; 
+    align-items: center; 
+}
+
+/* UPDATED: Inputs carry the width and allow both direction resizing */
+textarea.var-input { 
+    width: 240px; 
+    padding: 8px; 
+    border: 1px solid #ccc; 
+    border-radius: 4px; 
+    font: inherit; 
+    min-height: 38px;
+    resize: both; /* Allows left/right/up/down */
+}
+
+select { 
+    width: 240px; 
+    padding: 8px; 
+    border: 1px solid #ccc; 
+    border-radius: 4px; 
+    font: inherit; 
+    min-height: 38px; 
+}
 
 /* Business Hours Card */
 .bh-card {
