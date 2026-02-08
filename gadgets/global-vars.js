@@ -1,14 +1,13 @@
 /* gadgets/global-vars.js */
 (function() {
-    // Phase 11: Header Rename + Boolean Dropdown Fixes + Resize Support
-    const VERSION = "v3.4";
+    // Phase 12: Remove Duplicate Header + Flexbox Layout Fixes
+    const VERSION = "v3.5";
     console.log(`Global Variable Manager ${VERSION} loading...`);
 
     const template = document.createElement('template');
     template.innerHTML = `
       <style>@import url('https://griffindunn.github.io/wxccgadgets/styles/main.css');</style>
       <div id="app">
-          <h2>Supervisor Controls</h2>
           <div id="debug-info" style="font-size: 0.8em; color: #888; margin-bottom: 10px; display: none;"></div>
           <div id="content"></div>
       </div>
@@ -111,6 +110,7 @@
                 const type = (v.variableType || 'UNKNOWN').toUpperCase();
                 if (type !== currentType) {
                     currentType = type;
+                    // Provide a full-width break for new categories
                     contentDiv.insertAdjacentHTML('beforeend', `<h3 class="category-header">${currentType} Variables</h3>`);
                 }
                 contentDiv.insertAdjacentHTML('beforeend', this.buildVariableCard(v));
@@ -130,7 +130,6 @@
         }
 
         buildVariableCard(v) {
-            // Case-insensitive check for boolean type
             const vType = (v.variableType || '').toLowerCase();
             const isBool = (vType === 'boolean');
             
@@ -493,8 +492,6 @@
             btnElement.innerText = "...";
 
             const originalVar = this.data.variables.find(v => v.id === varId);
-            
-            // Handle saving boolean correctly
             const vType = (originalVar.variableType || '').toLowerCase();
             if (vType === 'boolean') newValue = (newValue === 'true'); 
 
