@@ -7,289 +7,266 @@
     overflow-y: auto;
     padding: 20px;
     box-sizing: border-box;
-    position: relative;
 }
 
 h2 {
     color: #00bceb;
     margin-top: 0;
-    margin-bottom: 20px;
+    margin-bottom: 25px;
+    font-weight: 300;
 }
 
+/* Section Headers */
 h3.category-header {
     grid-column: 1 / -1;
     margin-top: 30px;
-    margin-bottom: 10px;
-    font-size: 0.85rem;
+    margin-bottom: 15px;
+    font-size: 0.8rem;
+    font-weight: 700;
     text-transform: uppercase;
-    color: #888;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 5px;
-    letter-spacing: 1.5px;
+    color: #555;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 8px;
+    letter-spacing: 1px;
 }
 
-/* Grid Container */
+/* Layout Grid */
 #content {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-    gap: 15px;
+    gap: 20px;
     align-items: start;
-    padding-bottom: 30px;
+    padding-bottom: 40px;
 }
 
-/* --- Variable Card Styling --- */
+/* --- Global Variable Cards --- */
 .var-row {
-    background: #f9f9f9;
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
-    padding: 12px 15px;
+    background: #fff;
+    border: 1px solid #dcdcdc;
+    border-radius: 8px; /* Softer corners like Control Hub */
+    padding: 16px;
     display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    transition: all 0.2s;
-    position: relative;
+    align-items: center;
+    transition: box-shadow 0.2s;
 }
 
 .var-row:hover {
-    background-color: #f0faff;
-    border-color: #bce0fd;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 
 .var-info {
-    width: 200px;
-    flex-shrink: 0;
-    margin-right: 15px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    padding-top: 6px;
+    flex: 1;
+    margin-right: 20px;
 }
 
 .var-name {
     font-weight: 600;
     color: #333;
-    font-size: 0.9rem;
-    word-break: break-word;
+    font-size: 0.95rem;
+    display: block;
+    margin-bottom: 4px;
 }
 
 .var-desc {
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     color: #777;
-    margin-top: 4px;
-    font-style: italic;
-    line-height: 1.3;
+    line-height: 1.4;
 }
 
 .var-input-container {
-    flex-grow: 1;
+    width: 240px;
     display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    min-width: 0;
+    gap: 8px;
+    align-items: center;
 }
 
-/* Inputs & Textareas */
-textarea, select, input[type="text"], input[type="time"] {
-    padding: 8px;
+textarea.var-input, select {
+    width: 100%;
+    padding: 8px 12px;
     border: 1px solid #ccc;
     border-radius: 4px;
-    font-size: 13px;
     font-family: inherit;
-    box-sizing: border-box;
-}
-
-textarea.var-input {
-    width: 100%;
-    resize: both;
+    font-size: 13px;
     min-height: 38px;
-    line-height: 1.4;
-    white-space: pre-wrap;
+    resize: vertical;
 }
 
-select { height: 38px; width: 100%; }
-
-/* --- Business Hours Specifics (Redesigned) --- */
+/* --- Business Hours Cards (The Control Hub Look) --- */
 .bh-card {
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid #dcdcdc;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.bh-header {
+    background: #fcfcfc;
+    padding: 15px 20px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.bh-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.bh-content {
+    padding: 20px;
+    display: flex;
     flex-direction: column;
     gap: 15px;
 }
 
-.bh-header {
-    width: 100%;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #ddd;
-    padding-bottom: 10px;
-}
-
-.bh-list {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-/* Individual Shift Row (View Mode) */
+/* Shift List Item */
 .shift-item {
-    background: #fff;
-    border: 1px solid #ddd;
+    border: 1px solid #e0e0e0;
     border-radius: 6px;
-    padding: 10px;
+    padding: 12px 15px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    background: #fff;
 }
 
-.shift-info {
+.shift-main {
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-.shift-name {
-    font-weight: bold;
-    color: #00bceb;
+.shift-name-text {
+    font-weight: 600;
+    color: #007AA3; /* Webex Blue link color */
     font-size: 0.95rem;
 }
 
 .shift-details {
-    font-size: 0.8rem;
     color: #666;
+    font-size: 0.85rem;
 }
 
-/* Edit Mode Container */
-.shift-edit-container {
-    background: #fff;
-    border: 1px solid #00bceb; /* Highlight active edit */
+/* Edit Mode Box (Resembles Modal) */
+.shift-edit-box {
+    border: 1px solid #00bceb;
+    background: #f0fbff;
     border-radius: 6px;
-    padding: 15px;
+    padding: 20px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    margin-bottom: 10px;
+    gap: 15px;
 }
 
 .edit-row {
     display: flex;
-    gap: 15px;
+    gap: 20px;
     align-items: center;
     flex-wrap: wrap;
 }
 
-.edit-group {
+.form-group {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 6px;
 }
 
-.edit-label {
+.form-label {
     font-size: 0.75rem;
-    font-weight: 600;
+    font-weight: 700;
     color: #555;
+    text-transform: uppercase;
 }
 
-/* Day Selection Toggles */
-.day-toggles {
+.edit-days-container {
     display: flex;
-    gap: 5px;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
-.day-toggle {
-    width: 32px;
-    height: 32px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    background: #f5f5f5;
-    color: #666;
-    font-size: 0.75rem;
+/* Day "Pills" mimicking the screenshot checkboxes but cleaner */
+.day-pill {
     display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    background: #fff;
+    border-radius: 4px;
+    font-size: 0.85rem;
     cursor: pointer;
     user-select: none;
-    transition: all 0.2s;
 }
 
-.day-toggle.selected {
-    background-color: #00bceb;
+.day-pill:hover { background: #f5f5f5; }
+
+.day-pill.selected {
+    background: #00bceb;
     color: white;
     border-color: #00bceb;
-    font-weight: bold;
 }
 
 /* Buttons */
-button {
-    background-color: #00bceb;
-    color: white;
-    border: none;
+.btn {
     padding: 0 16px;
     height: 36px;
+    border: none;
     border-radius: 18px;
-    cursor: pointer;
     font-weight: 600;
-    font-size: 12px;
-    white-space: nowrap;
-    transition: background-color 0.2s;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
-button:hover { background-color: #00a0c6; }
-button:disabled { background-color: #ccc; cursor: not-allowed; }
+.btn-primary { background: #00bceb; color: white; }
+.btn-primary:hover { background: #00a0c6; }
+.btn-primary:disabled { background: #ccc; cursor: not-allowed; }
 
-button.secondary-btn {
-    background-color: transparent;
-    color: #666;
-    border: 1px solid #ccc;
-}
-button.secondary-btn:hover {
-    background-color: #eee;
-    color: #333;
-}
+.btn-secondary { background: #fff; border: 1px solid #ccc; color: #333; }
+.btn-secondary:hover { background: #f5f5f5; }
 
-button.danger-btn {
-    background-color: #e53935;
-}
-button.danger-btn:hover { background-color: #c62828; }
+.btn-danger { background: #dc3545; color: white; }
+.btn-danger:hover { background: #c82333; }
 
-button.sm-btn {
-    height: 28px;
-    padding: 0 12px;
-    font-size: 11px;
-}
+.btn-link { background: none; color: #007AA3; padding: 0; height: auto; text-decoration: none; }
+.btn-link:hover { text-decoration: underline; }
 
-/* Footer & Toast */
 .footer-version {
     position: fixed;
-    bottom: 5px;
-    left: 10px;
+    bottom: 8px;
+    left: 15px;
     font-size: 11px;
     color: #ccc;
     pointer-events: none;
-    z-index: 100;
-    font-family: monospace;
 }
 
 #toast {
     visibility: hidden;
-    min-width: 250px;
+    min-width: 300px;
     background-color: #333;
     color: #fff;
     text-align: center;
-    border-radius: 4px;
+    border-radius: 6px;
     padding: 16px;
     position: fixed;
-    z-index: 999;
+    z-index: 1000;
     left: 50%;
     bottom: 30px;
     transform: translateX(-50%);
     font-size: 14px;
     opacity: 0;
     transition: opacity 0.3s, bottom 0.3s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
 }
 
 #toast.show { visibility: visible; opacity: 1; bottom: 50px; }
 #toast.success { background-color: #2fb16c; }
 #toast.error { background-color: #d63d3d; }
-
-.loading { color: #666; font-style: italic; }
+.loading { color: #666; font-style: italic; display: flex; align-items: center; gap: 8px; }
