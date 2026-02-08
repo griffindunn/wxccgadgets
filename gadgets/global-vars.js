@@ -1,6 +1,6 @@
 /* gadgets/global-vars.js */
 (function() {
-    console.log('Global Variable Manager v2.4 (Sorted & Grouped) loading...');
+    console.log('Global Variable Manager v2.5 (Grid & Resizable) loading...');
 
     const template = document.createElement('template');
     template.innerHTML = `
@@ -82,15 +82,11 @@
 
                 const json = await response.json();
                 
+                // Store and Sort
                 this.variables = (json.data || []).filter(v => v.active !== false);
-                
-                // --- SORTING LOGIC ---
                 this.variables.sort((a, b) => {
-                    // 1. Sort by Type first
                     if (a.variableType < b.variableType) return -1;
                     if (a.variableType > b.variableType) return 1;
-                    
-                    // 2. Sort by Name alphabetically within type
                     if (a.name.toLowerCase() < b.name.toLowerCase()) return -1;
                     if (a.name.toLowerCase() > b.name.toLowerCase()) return 1;
                     return 0;
@@ -120,7 +116,7 @@
                 const isBool = (type === 'BOOLEAN');
                 const value = v.defaultValue; 
                 
-                // --- GROUP HEADERS ---
+                // Group Header
                 if (type !== currentType) {
                     currentType = type;
                     html += `<h3 class="category-header">${currentType} Variables</h3>`;
@@ -136,7 +132,9 @@
                         </select>
                     `;
                 } else {
-                    inputHtml = `<input type="text" id="input-${v.id}" value="${value || ''}" />`;
+                    // Changed from <input> to <textarea> to allow resizing
+                    // rows="1" makes it start small like an input
+                    inputHtml = `<textarea id="input-${v.id}" rows="1">${value || ''}</textarea>`;
                 }
 
                 html += `
@@ -169,7 +167,6 @@
 
             const originalVar = this.variables.find(v => v.id === varId);
 
-            // Correctly cast boolean values
             if (originalVar.variableType && originalVar.variableType.toUpperCase() === 'BOOLEAN') {
                 newValue = (newValue === 'true'); 
             }
