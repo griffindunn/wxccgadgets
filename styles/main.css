@@ -15,8 +15,9 @@ h2 {
     margin-bottom: 20px;
 }
 
-/* Category Headers */
 h3.category-header {
+    /* Headers span the full width of the grid */
+    grid-column: 1 / -1;
     margin-top: 25px;
     margin-bottom: 10px;
     font-size: 0.9rem;
@@ -27,27 +28,40 @@ h3.category-header {
     letter-spacing: 1px;
 }
 
-/* Variable Card/Row Styling */
+/* The Grid Container */
+#content {
+    display: grid;
+    /* This automatically fits as many 450px cards as possible per row */
+    grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+    gap: 15px; /* Space between cards */
+    align-items: start; /* Prevents cards from stretching vertically unnecessarily */
+}
+
+/* The Gray "Card" Box */
 .var-row {
     background: #f9f9f9;
     border: 1px solid #e0e0e0;
     border-radius: 4px;
-    padding: 10px 15px; /* Reduced padding slightly */
-    margin-bottom: 8px;
+    padding: 10px 15px;
+    /* Flexbox allows the content inside to wrap if needed */
     display: flex;
-    align-items: center; /* Vertically align items */
-    transition: background-color 0.2s;
+    flex-wrap: wrap; 
+    align-items: flex-start; /* Align to top so expanding text box doesn't center label */
+    transition: background-color 0.2s, box-shadow 0.2s;
+    height: auto; /* Ensures box grows when text box expands */
 }
 
 .var-row:hover {
-    background-color: #f0faff; /* Subtle blue tint on hover */
+    background-color: #f0faff;
     border-color: #bce0fd;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 
 .var-info {
-    width: 300px; /* Fixed width for labels keeps inputs aligned */
-    flex-shrink: 0; /* Prevent label from shrinking */
+    width: 200px;
+    flex-shrink: 0;
     margin-right: 15px;
+    padding-top: 8px; /* Align text with the top of the input/textarea */
 }
 
 .var-name {
@@ -55,23 +69,37 @@ h3.category-header {
     display: block;
     color: #333;
     font-size: 0.9rem;
+    word-break: break-word; /* Wrap long variable names */
 }
 
-/* Inputs Container - Moved closer */
 .var-input-container {
+    flex-grow: 1; /* Allow input area to fill remaining space */
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 10px;
-    flex-grow: 0; /* Do not push to the right edge */
+    min-width: 0; /* Prevents flexbox overflow issues */
 }
 
-/* Inputs */
-input[type="text"], select {
-    padding: 6px 10px;
+/* Inputs & Textareas */
+textarea, select {
+    padding: 8px;
     border: 1px solid #ccc;
     border-radius: 4px;
     font-size: 13px;
-    width: 220px; /* Slightly smaller width */
+    font-family: inherit;
+    width: 100%; /* Fill the container space */
+    box-sizing: border-box;
+}
+
+textarea {
+    resize: both; /* Allow resizing (vertical & horizontal) */
+    min-height: 36px; /* Start looking like a single line input */
+    line-height: 1.4;
+    white-space: pre-wrap; /* Preserve line breaks */
+}
+
+select {
+    height: 36px; /* Match textarea min-height */
 }
 
 /* Buttons */
@@ -79,11 +107,13 @@ button {
     background-color: #00bceb;
     color: white;
     border: none;
-    padding: 6px 14px;
-    border-radius: 16px;
+    padding: 8px 16px;
+    border-radius: 18px;
     cursor: pointer;
     font-weight: 600;
     font-size: 12px;
+    white-space: nowrap; /* Prevent "Save" text wrapping */
+    height: 36px; /* Align height with inputs */
     transition: background-color 0.2s;
 }
 
@@ -100,7 +130,7 @@ button:disabled { background-color: #ccc; cursor: not-allowed; }
     border-radius: 4px;
     padding: 16px;
     position: fixed;
-    z-index: 1;
+    z-index: 999;
     left: 50%;
     bottom: 30px;
     transform: translateX(-50%);
@@ -109,12 +139,7 @@ button:disabled { background-color: #ccc; cursor: not-allowed; }
     transition: opacity 0.3s, bottom 0.3s;
 }
 
-#toast.show {
-    visibility: visible;
-    opacity: 1;
-    bottom: 50px;
-}
-
+#toast.show { visibility: visible; opacity: 1; bottom: 50px; }
 #toast.success { background-color: #2fb16c; }
 #toast.error { background-color: #d63d3d; }
 
