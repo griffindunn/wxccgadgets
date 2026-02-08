@@ -15,63 +15,63 @@ h2 {
     margin-bottom: 20px;
 }
 
-/* Loading State */
-.loading {
+/* Category Headers */
+h3.category-header {
+    margin-top: 25px;
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+    text-transform: uppercase;
     color: #666;
-    font-style: italic;
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 5px;
+    letter-spacing: 1px;
 }
 
 /* Variable Card/Row Styling */
 .var-row {
     background: #f9f9f9;
     border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 12px;
+    border-radius: 4px;
+    padding: 10px 15px; /* Reduced padding slightly */
+    margin-bottom: 8px;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: box-shadow 0.2s;
+    align-items: center; /* Vertically align items */
+    transition: background-color 0.2s;
 }
 
 .var-row:hover {
-    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+    background-color: #f0faff; /* Subtle blue tint on hover */
+    border-color: #bce0fd;
 }
 
 .var-info {
-    flex: 1;
-    margin-right: 20px;
+    width: 300px; /* Fixed width for labels keeps inputs aligned */
+    flex-shrink: 0; /* Prevent label from shrinking */
+    margin-right: 15px;
 }
 
 .var-name {
-    font-weight: bold;
+    font-weight: 600;
     display: block;
     color: #333;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
 }
 
-.var-id {
-    font-size: 0.75rem;
-    color: #999;
-    font-family: monospace;
+/* Inputs Container - Moved closer */
+.var-input-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-grow: 0; /* Do not push to the right edge */
 }
 
 /* Inputs */
-.var-input-container {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-}
-
 input[type="text"], select {
-    padding: 8px 12px;
+    padding: 6px 10px;
     border: 1px solid #ccc;
     border-radius: 4px;
-    font-size: 14px;
-    width: 250px;
+    font-size: 13px;
+    width: 220px; /* Slightly smaller width */
 }
 
 /* Buttons */
@@ -79,21 +79,16 @@ button {
     background-color: #00bceb;
     color: white;
     border: none;
-    padding: 8px 16px;
-    border-radius: 20px;
+    padding: 6px 14px;
+    border-radius: 16px;
     cursor: pointer;
     font-weight: 600;
+    font-size: 12px;
     transition: background-color 0.2s;
 }
 
-button:hover {
-    background-color: #00a0c6;
-}
-
-button:disabled {
-    background-color: #ccc;
-    cursor: not-allowed;
-}
+button:hover { background-color: #00a0c6; }
+button:disabled { background-color: #ccc; cursor: not-allowed; }
 
 /* Notification Toast */
 #toast {
@@ -122,3 +117,5 @@ button:disabled {
 
 #toast.success { background-color: #2fb16c; }
 #toast.error { background-color: #d63d3d; }
+
+.loading { color: #666; font-style: italic; }
