@@ -16,7 +16,6 @@ h2 {
     font-weight: 300;
 }
 
-/* Section Headers */
 h3.category-header {
     grid-column: 1 / -1;
     margin-top: 30px;
@@ -30,7 +29,6 @@ h3.category-header {
     letter-spacing: 1px;
 }
 
-/* Layout Grid */
 #content {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
@@ -39,195 +37,111 @@ h3.category-header {
     padding-bottom: 40px;
 }
 
-/* --- Global Variable Cards --- */
+/* Variable Cards */
 .var-row {
     background: #fff;
     border: 1px solid #dcdcdc;
-    border-radius: 8px; /* Softer corners like Control Hub */
+    border-radius: 8px;
     padding: 16px;
     display: flex;
     align-items: center;
     transition: box-shadow 0.2s;
 }
+.var-row:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
 
-.var-row:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-}
+.var-info { flex: 1; margin-right: 20px; }
+.var-name { font-weight: 600; color: #333; font-size: 0.95rem; margin-bottom: 4px; display: block;}
+.var-desc { font-size: 0.8rem; color: #777; line-height: 1.4; }
 
-.var-info {
-    flex: 1;
-    margin-right: 20px;
-}
+.var-input-container { width: 240px; display: flex; gap: 8px; align-items: center; }
+textarea.var-input, select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font: inherit; min-height: 38px; }
 
-.var-name {
-    font-weight: 600;
-    color: #333;
-    font-size: 0.95rem;
-    display: block;
-    margin-bottom: 4px;
-}
-
-.var-desc {
-    font-size: 0.8rem;
-    color: #777;
-    line-height: 1.4;
-}
-
-.var-input-container {
-    width: 240px;
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
-
-textarea.var-input, select {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-family: inherit;
-    font-size: 13px;
-    min-height: 38px;
-    resize: vertical;
-}
-
-/* --- Business Hours Cards (The Control Hub Look) --- */
+/* Business Hours Card */
 .bh-card {
-    display: flex;
-    flex-direction: column;
-    background: #fff;
-    border: 1px solid #dcdcdc;
-    border-radius: 8px;
-    overflow: hidden;
+    display: flex; flex-direction: column;
+    background: #fff; border: 1px solid #dcdcdc; border-radius: 8px; overflow: hidden;
 }
-
 .bh-header {
-    background: #fcfcfc;
-    padding: 15px 20px;
+    background: #fcfcfc; padding: 15px 20px; border-bottom: 1px solid #eee;
+    display: flex; justify-content: space-between; align-items: center;
+}
+.bh-title { font-size: 1rem; font-weight: 600; color: #333; }
+.bh-content { padding: 0; }
+
+/* Day Grouping Layout */
+.bh-day-group {
     border-bottom: 1px solid #eee;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    padding: 12px 20px;
+}
+.bh-day-group:last-child { border-bottom: none; }
+
+.bh-day-name {
+    font-size: 0.85rem; font-weight: 700; color: #555; margin-bottom: 8px;
 }
 
-.bh-title {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #333;
+.bh-day-shifts {
+    display: flex; flex-direction: column; gap: 6px;
 }
 
-.bh-content {
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-/* Shift List Item */
-.shift-item {
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
-    padding: 12px 15px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: #fff;
-}
-
-.shift-main {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.shift-name-text {
-    font-weight: 600;
-    color: #007AA3; /* Webex Blue link color */
-    font-size: 0.95rem;
-}
-
-.shift-details {
-    color: #666;
-    font-size: 0.85rem;
-}
-
-/* Edit Mode Box (Resembles Modal) */
-.shift-edit-box {
-    border: 1px solid #00bceb;
-    background: #f0fbff;
-    border-radius: 6px;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-.edit-row {
-    display: flex;
-    gap: 20px;
-    align-items: center;
-    flex-wrap: wrap;
-}
-
-.form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.form-label {
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: #555;
-    text-transform: uppercase;
-}
-
-.edit-days-container {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-/* Day "Pills" mimicking the screenshot checkboxes but cleaner */
-.day-pill {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 10px;
-    border: 1px solid #ccc;
-    background: #fff;
+/* Shift Row (Clickable) */
+.shift-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Name | Time */
+    padding: 8px 12px;
+    background: #f9f9f9;
     border-radius: 4px;
-    font-size: 0.85rem;
     cursor: pointer;
-    user-select: none;
+    transition: background 0.1s;
+    font-size: 0.9rem;
 }
+.shift-row:hover { background: #eef9fd; }
+.shift-row-name { color: #007AA3; font-weight: 600; }
+.shift-row-time { color: #666; text-align: right; }
+.shift-empty { font-size: 0.85rem; color: #999; font-style: italic; padding-left: 12px; }
 
+/* Edit Mode Form */
+.shift-edit-box {
+    background: #f0fbff;
+    border: 1px solid #00bceb;
+    border-radius: 6px;
+    padding: 15px;
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.edit-row { display: flex; gap: 15px; flex-wrap: wrap; }
+.form-group { display: flex; flex-direction: column; gap: 4px; }
+.form-label { font-size: 0.7rem; font-weight: 700; color: #555; text-transform: uppercase; }
+
+.day-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.day-pill {
+    padding: 5px 8px; border: 1px solid #ccc; background: #fff; border-radius: 4px;
+    font-size: 0.75rem; cursor: pointer; user-select: none;
+}
 .day-pill:hover { background: #f5f5f5; }
+.day-pill.selected { background: #00bceb; color: white; border-color: #00bceb; }
 
-.day-pill.selected {
-    background: #00bceb;
-    color: white;
-    border-color: #00bceb;
+/* Save Bar (Hidden by default) */
+.bh-save-bar {
+    padding: 15px 20px; background: #fafafa; border-top: 1px solid #ddd;
+    text-align: right; display: none; /* Hidden until changes */
 }
+.bh-save-bar.visible { display: block; animation: slideUp 0.3s ease-out; }
+
+@keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
 /* Buttons */
 .btn {
-    padding: 0 16px;
-    height: 36px;
-    border: none;
-    border-radius: 18px;
-    font-weight: 600;
-    font-size: 13px;
-    cursor: pointer;
-    transition: background 0.2s;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    padding: 0 16px; height: 36px; border: none; border-radius: 18px;
+    font-weight: 600; font-size: 13px; cursor: pointer; transition: 0.2s;
 }
-
 .btn-primary { background: #00bceb; color: white; }
 .btn-primary:hover { background: #00a0c6; }
 .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+
+.btn-black { background: #222; color: white; } /* Black Add Shift Button */
+.btn-black:hover { background: #000; }
 
 .btn-secondary { background: #fff; border: 1px solid #ccc; color: #333; }
 .btn-secondary:hover { background: #f5f5f5; }
@@ -235,37 +149,13 @@ textarea.var-input, select {
 .btn-danger { background: #dc3545; color: white; }
 .btn-danger:hover { background: #c82333; }
 
-.btn-link { background: none; color: #007AA3; padding: 0; height: auto; text-decoration: none; }
-.btn-link:hover { text-decoration: underline; }
-
-.footer-version {
-    position: fixed;
-    bottom: 8px;
-    left: 15px;
-    font-size: 11px;
-    color: #ccc;
-    pointer-events: none;
-}
-
+.footer-version { position: fixed; bottom: 8px; left: 15px; font-size: 11px; color: #ccc; pointer-events: none; }
 #toast {
-    visibility: hidden;
-    min-width: 300px;
-    background-color: #333;
-    color: #fff;
-    text-align: center;
-    border-radius: 6px;
-    padding: 16px;
-    position: fixed;
-    z-index: 1000;
-    left: 50%;
-    bottom: 30px;
-    transform: translateX(-50%);
-    font-size: 14px;
-    opacity: 0;
-    transition: opacity 0.3s, bottom 0.3s;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    visibility: hidden; min-width: 300px; background-color: #333; color: #fff;
+    text-align: center; border-radius: 6px; padding: 16px;
+    position: fixed; z-index: 1000; left: 50%; bottom: 30px; transform: translateX(-50%);
+    opacity: 0; transition: opacity 0.3s;
 }
-
 #toast.show { visibility: visible; opacity: 1; bottom: 50px; }
 #toast.success { background-color: #2fb16c; }
 #toast.error { background-color: #d63d3d; }
