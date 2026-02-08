@@ -1,7 +1,7 @@
 /* gadgets/global-vars.js */
 (function() {
-    // Phase 5: Business Hours + Descriptions + Version Footer
-    const VERSION = "v2.6";
+    // Phase 6: Advanced Business Hours (Add/Edit/Delete + Conflict Checks)
+    const VERSION = "v2.7";
     console.log(`Global Variable Manager ${VERSION} loading...`);
 
     const template = document.createElement('template');
@@ -31,8 +31,12 @@
             
             this.data = {
                 variables: [],
-                businessHours: []
+                businessHours: [] 
             };
+
+            // Holds temp state for editing a specific BH Schedule
+            // format: { [bhId]: [ { name, days:[], startTime, endTime }, ... ] }
+            this.editState = {}; 
         }
 
         static get observedAttributes() {
@@ -75,7 +79,6 @@
             contentDiv.innerHTML = '<div class="loading"><span>Loading Data...</span></div>';
 
             try {
-                // Fetch both in parallel
                 await Promise.all([
                     this.loadVariables(),
                     this.loadBusinessHours()
@@ -107,13 +110,19 @@
             if (!response.ok) throw new Error(`Business Hours API Error ${response.status}`);
             const json = await response.json();
             this.data.businessHours = json.data || [];
+            
+            // Initialize Edit State (Deep Copy)
+            this.editState = {};
+            this.data.businessHours.forEach(bh => {
+                this.editState[bh.id] = JSON.parse(JSON.stringify(bh.workingHours || []));
+            });
         }
 
         render() {
             const contentDiv = this.shadowRoot.getElementById('content');
-            contentDiv.innerHTML = ''; // Clear
+            contentDiv.innerHTML = '';
 
-            // --- 1. Render Variables Sorted by Type -> Name ---
+            // 1. Variables
             const vars = [...this.data.variables].sort((a, b) => {
                 if (a.variableType < b.variableType) return -1;
                 if (a.variableType > b.variableType) return 1;
@@ -124,37 +133,30 @@
             let currentType = '';
             vars.forEach(v => {
                 const type = (v.variableType || 'UNKNOWN').toUpperCase();
-                
                 if (type !== currentType) {
                     currentType = type;
                     contentDiv.insertAdjacentHTML('beforeend', `<h3 class="category-header">${currentType} Variables</h3>`);
                 }
-                
                 contentDiv.insertAdjacentHTML('beforeend', this.buildVariableCard(v));
             });
 
-            // --- 2. Render Business Hours ---
+            // 2. Business Hours
             if (this.data.businessHours.length > 0) {
                 contentDiv.insertAdjacentHTML('beforeend', `<h3 class="category-header">Business Hours</h3>`);
                 this.data.businessHours.forEach(bh => {
-                    contentDiv.appendChild(this.buildBusinessHoursCard(bh));
+                    // Pass the *edit state* shifts, not the original ones, so UI updates instantly
+                    const shifts = this.editState[bh.id] || [];
+                    contentDiv.appendChild(this.buildBusinessHoursCard(bh, shifts));
                 });
             }
 
-            // Attach Event Listeners
-            contentDiv.querySelectorAll('.save-var-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => this.handleSaveVariable(e.target.dataset.id, e.target));
-            });
-            contentDiv.querySelectorAll('.save-bh-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => this.handleSaveBusinessHours(e.target.dataset.id, e.target));
-            });
+            this.attachEventListeners(contentDiv);
         }
 
-        // --- HTML Generator: Variable Card ---
         buildVariableCard(v) {
             const isBool = (v.variableType === 'BOOLEAN');
             const value = v.defaultValue;
-            const descriptionHtml = v.description ? `<div class="var-desc">${v.description}</div>` : '';
+            const desc = v.description ? `<div class="var-desc">${v.description}</div>` : '';
             
             let inputHtml = '';
             if (isBool) {
@@ -173,7 +175,7 @@
                 <div class="var-row">
                     <div class="var-info">
                         <span class="var-name">${v.name}</span>
-                        ${descriptionHtml}
+                        ${desc}
                     </div>
                     <div class="var-input-container">
                         ${inputHtml}
@@ -183,45 +185,22 @@
             `;
         }
 
-        // --- HTML Generator: Business Hours Card (Complex) ---
-        buildBusinessHoursCard(bh) {
+        buildBusinessHoursCard(bh, shifts) {
             const card = document.createElement('div');
             card.className = 'var-row bh-card';
             
-            let shiftsHtml = '';
-            
-            // Generate rows for each shift (e.g. Morning, Afternoon)
-            // Note: We use unique IDs for inputs to gather them later
-            if (bh.workingHours && bh.workingHours.length > 0) {
-                bh.workingHours.forEach((shift, index) => {
-                    const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-                    
-                    let daysHtml = '<div class="bh-days">';
-                    days.forEach(day => {
-                        const isChecked = shift.days.includes(day) ? 'checked' : '';
-                        daysHtml += `
-                            <label class="bh-day-check">
-                                <span>${day[0]}</span>
-                                <input type="checkbox" class="bh-input-day" data-bh="${bh.id}" data-idx="${index}" value="${day}" ${isChecked}>
-                            </label>
-                        `;
-                    });
-                    daysHtml += '</div>';
-
-                    shiftsHtml += `
-                        <div class="bh-shift-row">
-                            ${daysHtml}
-                            <div class="bh-time-group">
-                                <input type="time" class="bh-input-start" data-bh="${bh.id}" data-idx="${index}" value="${shift.startTime}">
-                                <span>to</span>
-                                <input type="time" class="bh-input-end" data-bh="${bh.id}" data-idx="${index}" value="${shift.endTime}">
-                            </div>
-                        </div>
-                    `;
-                });
-            } else {
-                shiftsHtml = '<div style="color:#999;font-style:italic;">No shifts defined.</div>';
-            }
+            const shiftsHtml = shifts.map((shift, idx) => `
+                <div class="shift-item">
+                    <div class="shift-info">
+                        <span class="shift-name">${shift.name || 'Unnamed Shift'}</span>
+                        <span class="shift-details">${this.formatDays(shift.days)} • ${this.formatTime(shift.startTime)} - ${this.formatTime(shift.endTime)}</span>
+                    </div>
+                    <div style="display:flex;gap:5px;">
+                        <button class="edit-shift-btn secondary-btn sm-btn" data-bh="${bh.id}" data-idx="${idx}">Edit</button>
+                        <button class="delete-shift-btn danger-btn sm-btn" data-bh="${bh.id}" data-idx="${idx}">✕</button>
+                    </div>
+                </div>
+            `).join('');
 
             card.innerHTML = `
                 <div class="bh-header">
@@ -229,17 +208,201 @@
                         <span class="var-name">${bh.name}</span>
                         ${bh.description ? `<div class="var-desc">${bh.description}</div>` : ''}
                     </div>
-                    <button class="save-bh-btn" data-id="${bh.id}">Save</button>
+                    <button class="add-shift-btn sm-btn" data-bh="${bh.id}">+ Add Shift</button>
                 </div>
-                <div class="bh-shifts-container">
-                    ${shiftsHtml}
+                <div class="bh-list">
+                    ${shifts.length ? shiftsHtml : '<div style="color:#999;font-style:italic;padding:10px;">No shifts defined.</div>'}
+                </div>
+                <div style="text-align:right;width:100%;margin-top:10px;">
+                    <button class="save-bh-btn" data-bh="${bh.id}">Save Changes</button>
                 </div>
             `;
             return card;
         }
 
-        // --- Action: Save Variable ---
+        // --- Event Listeners ---
+        attachEventListeners(root) {
+            // Variable Saves
+            root.querySelectorAll('.save-var-btn').forEach(b => b.addEventListener('click', e => this.handleSaveVariable(e.target.dataset.id, e.target)));
+            
+            // Business Hours Actions
+            root.querySelectorAll('.add-shift-btn').forEach(b => b.addEventListener('click', e => this.addShift(e.target.dataset.bh)));
+            root.querySelectorAll('.delete-shift-btn').forEach(b => b.addEventListener('click', e => this.deleteShift(e.target.dataset.bh, e.target.dataset.idx)));
+            root.querySelectorAll('.edit-shift-btn').forEach(b => b.addEventListener('click', e => this.editShiftUI(e.target.dataset.bh, e.target.dataset.idx, e.target)));
+            root.querySelectorAll('.save-bh-btn').forEach(b => b.addEventListener('click', e => this.handleSaveBusinessHours(e.target.dataset.bh, e.target)));
+        }
+
+        // --- Business Hours Logic ---
+
+        addShift(bhId) {
+            // Default new shift
+            this.editState[bhId].push({
+                name: "New Shift",
+                days: ["MON", "TUE", "WED", "THU", "FRI"],
+                startTime: "09:00",
+                endTime: "17:00"
+            });
+            this.render(); // Re-render to show the new item
+        }
+
+        deleteShift(bhId, idx) {
+            if(confirm("Are you sure you want to remove this shift?")) {
+                this.editState[bhId].splice(idx, 1);
+                this.render();
+            }
+        }
+
+        editShiftUI(bhId, idx, btnEl) {
+            // Replace the "View" row with an "Edit" form inline
+            const container = btnEl.closest('.shift-item');
+            const shift = this.editState[bhId][idx];
+            const allDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+
+            container.outerHTML = `
+                <div class="shift-edit-container">
+                    <div class="edit-row">
+                        <div class="edit-group">
+                            <span class="edit-label">Name</span>
+                            <input type="text" class="edit-name" value="${shift.name}">
+                        </div>
+                        <div class="edit-group">
+                            <span class="edit-label">Start</span>
+                            <input type="time" class="edit-start" value="${shift.startTime}">
+                        </div>
+                        <div class="edit-group">
+                            <span class="edit-label">End</span>
+                            <input type="time" class="edit-end" value="${shift.endTime}">
+                        </div>
+                    </div>
+                    <div class="edit-group">
+                        <span class="edit-label">Days Active</span>
+                        <div class="day-toggles">
+                            ${allDays.map(d => `
+                                <div class="day-toggle ${shift.days.includes(d) ? 'selected' : ''}" data-day="${d}">${d.substring(0,1)}</div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:5px;">
+                        <button class="confirm-edit-btn sm-btn" data-bh="${bhId}" data-idx="${idx}">Done</button>
+                    </div>
+                </div>
+            `;
+
+            // Re-attach listeners for this temporary inline form
+            // We use shadowRoot querySelector because we just replaced HTML
+            const editBox = this.shadowRoot.querySelector('.shift-edit-container');
+            
+            // Toggle Days
+            editBox.querySelectorAll('.day-toggle').forEach(t => {
+                t.addEventListener('click', (e) => {
+                    e.target.classList.toggle('selected');
+                });
+            });
+
+            // Confirm Edit
+            editBox.querySelector('.confirm-edit-btn').addEventListener('click', () => {
+                // Gather Data
+                const newName = editBox.querySelector('.edit-name').value;
+                const newStart = editBox.querySelector('.edit-start').value;
+                const newEnd = editBox.querySelector('.edit-end').value;
+                const newDays = Array.from(editBox.querySelectorAll('.day-toggle.selected')).map(el => el.dataset.day);
+
+                // Basic Validation
+                if (!newName || newDays.length === 0) {
+                    alert("Please provide a name and select at least one day.");
+                    return;
+                }
+                if (newStart >= newEnd) {
+                    alert("Start time must be before End time.");
+                    return;
+                }
+
+                // Update State
+                this.editState[bhId][idx] = {
+                    name: newName,
+                    startTime: newStart,
+                    endTime: newEnd,
+                    days: newDays
+                };
+
+                this.render(); // Exit edit mode
+            });
+        }
+
+        // --- Conflict Detection ---
+        checkConflicts(shifts) {
+            const dayMap = {}; // { MON: [ {start: 900, end: 1700, name: "Shift 1"} ] }
+
+            for (const s of shifts) {
+                const start = parseInt(s.startTime.replace(':', ''));
+                const end = parseInt(s.endTime.replace(':', ''));
+
+                for (const d of s.days) {
+                    if (!dayMap[d]) dayMap[d] = [];
+                    // Check overlap
+                    for (const existing of dayMap[d]) {
+                        // Logic: (StartA <= EndB) and (EndA >= StartB)
+                        if (start < existing.end && end > existing.start) {
+                            return `Conflict on ${d}: "${s.name}" overlaps with "${existing.name}"`;
+                        }
+                    }
+                    dayMap[d].push({ start, end, name: s.name });
+                }
+            }
+            return null; // No conflicts
+        }
+
+        // --- Save Handlers ---
+
+        async handleSaveBusinessHours(bhId, btnElement) {
+            const originalText = btnElement.innerText;
+            btnElement.disabled = true;
+            btnElement.innerText = "Checking...";
+
+            const finalShifts = this.editState[bhId];
+
+            // 1. Check for Conflicts
+            const conflictError = this.checkConflicts(finalShifts);
+            if (conflictError) {
+                this.showNotification(`Error: ${conflictError}`, 'error');
+                btnElement.disabled = false;
+                btnElement.innerText = originalText;
+                return;
+            }
+
+            // 2. Prepare Payload
+            const originalBh = this.data.businessHours.find(b => b.id === bhId);
+            const payload = {
+                ...originalBh,
+                workingHours: finalShifts
+            };
+
+            // 3. Send to API
+            try {
+                btnElement.innerText = "Saving...";
+                const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/business-hours/${bhId}`;
+                const response = await fetch(url, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${this.ctx.token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error(`Status ${response.status}`);
+                
+                // Success: Update the main data source
+                originalBh.workingHours = JSON.parse(JSON.stringify(finalShifts));
+                this.showNotification(`Saved "${originalBh.name}"`, 'success');
+
+            } catch (err) {
+                this.showNotification(`Save Failed: ${err.message}`, 'error');
+            } finally {
+                btnElement.disabled = false;
+                btnElement.innerText = originalText;
+            }
+        }
+
         async handleSaveVariable(varId, btnElement) {
+            // (Same variable save logic as before)
             const input = this.shadowRoot.getElementById(`input-${varId}`);
             let newValue = input.value;
             const originalText = btnElement.innerText;
@@ -270,61 +433,30 @@
             }
         }
 
-        // --- Action: Save Business Hours ---
-        async handleSaveBusinessHours(bhId, btnElement) {
-            const originalText = btnElement.innerText;
-            btnElement.disabled = true;
-            btnElement.innerText = "...";
+        // --- Helpers ---
+        formatDays(days) {
+            if (!days || days.length === 0) return 'No Days';
+            if (days.length === 7) return 'Every Day';
+            // Sort days
+            const map = {SUN:0, MON:1, TUE:2, WED:3, THU:4, FRI:5, SAT:6};
+            const sorted = [...days].sort((a,b) => map[a] - map[b]);
+            return sorted.map(d => d.substring(0,3)).join(', ');
+        }
 
-            const originalBh = this.data.businessHours.find(b => b.id === bhId);
-            
-            // Reconstruct the workingHours array from the DOM inputs
-            // We clone the original structure to keep names/ids, but update days/times
-            const updatedWorkingHours = JSON.parse(JSON.stringify(originalBh.workingHours));
-            
-            try {
-                updatedWorkingHours.forEach((shift, index) => {
-                    // Gather selected days for this shift index
-                    const dayChecks = this.shadowRoot.querySelectorAll(`.bh-input-day[data-bh="${bhId}"][data-idx="${index}"]:checked`);
-                    const selectedDays = Array.from(dayChecks).map(cb => cb.value);
-                    
-                    // Gather times
-                    const startInput = this.shadowRoot.querySelector(`.bh-input-start[data-bh="${bhId}"][data-idx="${index}"]`);
-                    const endInput = this.shadowRoot.querySelector(`.bh-input-end[data-bh="${bhId}"][data-idx="${index}"]`);
-                    
-                    shift.days = selectedDays;
-                    shift.startTime = startInput.value;
-                    shift.endTime = endInput.value;
-                });
-
-                const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/business-hours/${bhId}`;
-                const payload = { ...originalBh, workingHours: updatedWorkingHours };
-
-                const response = await fetch(url, {
-                    method: 'PUT',
-                    headers: { 'Authorization': `Bearer ${this.ctx.token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) throw new Error(`Status ${response.status}`);
-                
-                originalBh.workingHours = updatedWorkingHours; // Update local state
-                this.showNotification(`Saved "${originalBh.name}"`, 'success');
-
-            } catch (err) {
-                console.error(err);
-                this.showNotification(`Error: ${err.message}`, 'error');
-            } finally {
-                btnElement.disabled = false;
-                btnElement.innerText = originalText;
-            }
+        formatTime(t) {
+            if (!t) return '';
+            const [h, m] = t.split(':');
+            const date = new Date();
+            date.setHours(h);
+            date.setMinutes(m);
+            return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
         }
 
         showNotification(msg, type) {
             const toast = this.shadowRoot.getElementById('toast');
             toast.innerText = msg;
             toast.className = `show ${type}`;
-            setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+            setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 4000);
         }
     }
 
