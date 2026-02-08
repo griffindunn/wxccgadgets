@@ -1,6 +1,8 @@
 /* gadgets/global-vars.js */
 (function() {
-    console.log('Global Variable Manager v2.5 (Grid & Resizable) loading...');
+    // Phase 5: Business Hours + Descriptions + Version Footer
+    const VERSION = "v2.6";
+    console.log(`Global Variable Manager ${VERSION} loading...`);
 
     const template = document.createElement('template');
     template.innerHTML = `
@@ -11,6 +13,7 @@
           <div id="content"></div>
       </div>
       <div id="toast">Notification</div>
+      <div class="footer-version">${VERSION}</div>
     `;
 
     class GlobalVariableManager extends HTMLElement {
@@ -25,7 +28,11 @@
                 region: null,
                 baseUrl: null
             };
-            this.variables = [];
+            
+            this.data = {
+                variables: [],
+                businessHours: []
+            };
         }
 
         static get observedAttributes() {
@@ -42,7 +49,7 @@
 
             if (this.ctx.token && this.ctx.orgId && this.ctx.baseUrl) {
                 this.updateDebugDisplay();
-                this.loadVariables();
+                this.loadAllData();
             }
         }
 
@@ -63,151 +70,250 @@
             debugEl.innerText = `Org: ${this.ctx.orgId} | API: ${this.ctx.baseUrl}`;
         }
 
-        async loadVariables() {
+        async loadAllData() {
             const contentDiv = this.shadowRoot.getElementById('content');
-            contentDiv.innerHTML = '<div class="loading"><span>Retrieving Global Variables...</span></div>';
+            contentDiv.innerHTML = '<div class="loading"><span>Loading Data...</span></div>';
 
             try {
-                const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/cad-variable?page=0&pageSize=100`;
-                
-                const response = await fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${this.ctx.token}`,
-                        'Accept': 'application/json'
-                    }
-                });
-
-                if (!response.ok) throw new Error(`API Error ${response.status}`);
-
-                const json = await response.json();
-                
-                // Store and Sort
-                this.variables = (json.data || []).filter(v => v.active !== false);
-                this.variables.sort((a, b) => {
-                    if (a.variableType < b.variableType) return -1;
-                    if (a.variableType > b.variableType) return 1;
-                    if (a.name.toLowerCase() < b.name.toLowerCase()) return -1;
-                    if (a.name.toLowerCase() > b.name.toLowerCase()) return 1;
-                    return 0;
-                });
-
+                // Fetch both in parallel
+                await Promise.all([
+                    this.loadVariables(),
+                    this.loadBusinessHours()
+                ]);
                 this.render();
-
             } catch (err) {
                 console.error('[GlobalVarManager] Load failed:', err);
                 contentDiv.innerHTML = `<div style="color:red">Error loading data: ${err.message}</div>`;
             }
         }
 
+        async loadVariables() {
+            const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/cad-variable?page=0&pageSize=100`;
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${this.ctx.token}`, 'Accept': 'application/json' }
+            });
+            if (!response.ok) throw new Error(`Variables API Error ${response.status}`);
+            const json = await response.json();
+            this.data.variables = (json.data || []).filter(v => v.active !== false);
+        }
+
+        async loadBusinessHours() {
+            const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/business-hours?page=0&pageSize=100`;
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${this.ctx.token}`, 'Accept': 'application/json' }
+            });
+            if (!response.ok) throw new Error(`Business Hours API Error ${response.status}`);
+            const json = await response.json();
+            this.data.businessHours = json.data || [];
+        }
+
         render() {
             const contentDiv = this.shadowRoot.getElementById('content');
-            
-            if (this.variables.length === 0) {
-                contentDiv.innerHTML = '<p style="padding:20px;text-align:center;">No active global variables found.</p>';
-                return;
-            }
+            contentDiv.innerHTML = ''; // Clear
 
-            let html = '';
-            let currentType = '';
-
-            this.variables.forEach(v => {
-                const type = (v.variableType || 'UNKNOWN').toUpperCase();
-                const isBool = (type === 'BOOLEAN');
-                const value = v.defaultValue; 
-                
-                // Group Header
-                if (type !== currentType) {
-                    currentType = type;
-                    html += `<h3 class="category-header">${currentType} Variables</h3>`;
-                }
-                
-                let inputHtml = '';
-                if (isBool) {
-                    const isTrue = (String(value) === 'true');
-                    inputHtml = `
-                        <select id="input-${v.id}">
-                            <option value="true" ${isTrue ? 'selected' : ''}>TRUE</option>
-                            <option value="false" ${!isTrue ? 'selected' : ''}>FALSE</option>
-                        </select>
-                    `;
-                } else {
-                    // Changed from <input> to <textarea> to allow resizing
-                    // rows="1" makes it start small like an input
-                    inputHtml = `<textarea id="input-${v.id}" rows="1">${value || ''}</textarea>`;
-                }
-
-                html += `
-                    <div class="var-row">
-                        <div class="var-info">
-                            <span class="var-name">${v.name}</span>
-                        </div>
-                        <div class="var-input-container">
-                            ${inputHtml}
-                            <button class="save-btn" data-id="${v.id}">Save</button>
-                        </div>
-                    </div>
-                `;
+            // --- 1. Render Variables Sorted by Type -> Name ---
+            const vars = [...this.data.variables].sort((a, b) => {
+                if (a.variableType < b.variableType) return -1;
+                if (a.variableType > b.variableType) return 1;
+                if (a.name.toLowerCase() < b.name.toLowerCase()) return -1;
+                return 1;
             });
 
-            contentDiv.innerHTML = html;
+            let currentType = '';
+            vars.forEach(v => {
+                const type = (v.variableType || 'UNKNOWN').toUpperCase();
+                
+                if (type !== currentType) {
+                    currentType = type;
+                    contentDiv.insertAdjacentHTML('beforeend', `<h3 class="category-header">${currentType} Variables</h3>`);
+                }
+                
+                contentDiv.insertAdjacentHTML('beforeend', this.buildVariableCard(v));
+            });
 
-            contentDiv.querySelectorAll('.save-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => this.handleSave(e.target.dataset.id, e.target));
+            // --- 2. Render Business Hours ---
+            if (this.data.businessHours.length > 0) {
+                contentDiv.insertAdjacentHTML('beforeend', `<h3 class="category-header">Business Hours</h3>`);
+                this.data.businessHours.forEach(bh => {
+                    contentDiv.appendChild(this.buildBusinessHoursCard(bh));
+                });
+            }
+
+            // Attach Event Listeners
+            contentDiv.querySelectorAll('.save-var-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => this.handleSaveVariable(e.target.dataset.id, e.target));
+            });
+            contentDiv.querySelectorAll('.save-bh-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => this.handleSaveBusinessHours(e.target.dataset.id, e.target));
             });
         }
 
-        async handleSave(varId, btnElement) {
+        // --- HTML Generator: Variable Card ---
+        buildVariableCard(v) {
+            const isBool = (v.variableType === 'BOOLEAN');
+            const value = v.defaultValue;
+            const descriptionHtml = v.description ? `<div class="var-desc">${v.description}</div>` : '';
+            
+            let inputHtml = '';
+            if (isBool) {
+                const isTrue = (String(value) === 'true');
+                inputHtml = `
+                    <select id="input-${v.id}">
+                        <option value="true" ${isTrue ? 'selected' : ''}>TRUE</option>
+                        <option value="false" ${!isTrue ? 'selected' : ''}>FALSE</option>
+                    </select>
+                `;
+            } else {
+                inputHtml = `<textarea id="input-${v.id}" class="var-input" rows="1">${value || ''}</textarea>`;
+            }
+
+            return `
+                <div class="var-row">
+                    <div class="var-info">
+                        <span class="var-name">${v.name}</span>
+                        ${descriptionHtml}
+                    </div>
+                    <div class="var-input-container">
+                        ${inputHtml}
+                        <button class="save-var-btn" data-id="${v.id}">Save</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- HTML Generator: Business Hours Card (Complex) ---
+        buildBusinessHoursCard(bh) {
+            const card = document.createElement('div');
+            card.className = 'var-row bh-card';
+            
+            let shiftsHtml = '';
+            
+            // Generate rows for each shift (e.g. Morning, Afternoon)
+            // Note: We use unique IDs for inputs to gather them later
+            if (bh.workingHours && bh.workingHours.length > 0) {
+                bh.workingHours.forEach((shift, index) => {
+                    const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+                    
+                    let daysHtml = '<div class="bh-days">';
+                    days.forEach(day => {
+                        const isChecked = shift.days.includes(day) ? 'checked' : '';
+                        daysHtml += `
+                            <label class="bh-day-check">
+                                <span>${day[0]}</span>
+                                <input type="checkbox" class="bh-input-day" data-bh="${bh.id}" data-idx="${index}" value="${day}" ${isChecked}>
+                            </label>
+                        `;
+                    });
+                    daysHtml += '</div>';
+
+                    shiftsHtml += `
+                        <div class="bh-shift-row">
+                            ${daysHtml}
+                            <div class="bh-time-group">
+                                <input type="time" class="bh-input-start" data-bh="${bh.id}" data-idx="${index}" value="${shift.startTime}">
+                                <span>to</span>
+                                <input type="time" class="bh-input-end" data-bh="${bh.id}" data-idx="${index}" value="${shift.endTime}">
+                            </div>
+                        </div>
+                    `;
+                });
+            } else {
+                shiftsHtml = '<div style="color:#999;font-style:italic;">No shifts defined.</div>';
+            }
+
+            card.innerHTML = `
+                <div class="bh-header">
+                    <div class="var-info" style="width:auto;margin:0;">
+                        <span class="var-name">${bh.name}</span>
+                        ${bh.description ? `<div class="var-desc">${bh.description}</div>` : ''}
+                    </div>
+                    <button class="save-bh-btn" data-id="${bh.id}">Save</button>
+                </div>
+                <div class="bh-shifts-container">
+                    ${shiftsHtml}
+                </div>
+            `;
+            return card;
+        }
+
+        // --- Action: Save Variable ---
+        async handleSaveVariable(varId, btnElement) {
             const input = this.shadowRoot.getElementById(`input-${varId}`);
             let newValue = input.value;
             const originalText = btnElement.innerText;
-
             btnElement.disabled = true;
-            btnElement.innerText = "Saving...";
+            btnElement.innerText = "...";
 
-            const originalVar = this.variables.find(v => v.id === varId);
-
-            if (originalVar.variableType && originalVar.variableType.toUpperCase() === 'BOOLEAN') {
-                newValue = (newValue === 'true'); 
-            }
+            const originalVar = this.data.variables.find(v => v.id === varId);
+            if (originalVar.variableType === 'BOOLEAN') newValue = (newValue === 'true'); 
 
             try {
                 const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/cad-variable/${varId}`;
-                
-                const payload = {
-                    ...originalVar, 
-                    id: varId, 
-                    defaultValue: newValue 
-                };
+                const payload = { ...originalVar, id: varId, defaultValue: newValue };
 
                 const response = await fetch(url, {
                     method: 'PUT',
-                    headers: {
-                        'Authorization': `Bearer ${this.ctx.token}`,
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
+                    headers: { 'Authorization': `Bearer ${this.ctx.token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
 
-                if (!response.ok) {
-                    const errText = await response.text();
-                    let friendlyError = `Status ${response.status}`;
-                    try {
-                        const errJson = JSON.parse(errText);
-                        if (errJson.message) friendlyError = errJson.message;
-                        if (errJson.apiError && errJson.apiError.description) friendlyError = errJson.apiError.description;
-                    } catch(e) {}
-                    
-                    throw new Error(friendlyError);
-                }
-
+                if (!response.ok) throw new Error(`Status ${response.status}`);
                 originalVar.defaultValue = newValue;
                 this.showNotification(`Saved "${originalVar.name}"`, 'success');
+            } catch (err) {
+                this.showNotification(`Error: ${err.message}`, 'error');
+            } finally {
+                btnElement.disabled = false;
+                btnElement.innerText = originalText;
+            }
+        }
+
+        // --- Action: Save Business Hours ---
+        async handleSaveBusinessHours(bhId, btnElement) {
+            const originalText = btnElement.innerText;
+            btnElement.disabled = true;
+            btnElement.innerText = "...";
+
+            const originalBh = this.data.businessHours.find(b => b.id === bhId);
+            
+            // Reconstruct the workingHours array from the DOM inputs
+            // We clone the original structure to keep names/ids, but update days/times
+            const updatedWorkingHours = JSON.parse(JSON.stringify(originalBh.workingHours));
+            
+            try {
+                updatedWorkingHours.forEach((shift, index) => {
+                    // Gather selected days for this shift index
+                    const dayChecks = this.shadowRoot.querySelectorAll(`.bh-input-day[data-bh="${bhId}"][data-idx="${index}"]:checked`);
+                    const selectedDays = Array.from(dayChecks).map(cb => cb.value);
+                    
+                    // Gather times
+                    const startInput = this.shadowRoot.querySelector(`.bh-input-start[data-bh="${bhId}"][data-idx="${index}"]`);
+                    const endInput = this.shadowRoot.querySelector(`.bh-input-end[data-bh="${bhId}"][data-idx="${index}"]`);
+                    
+                    shift.days = selectedDays;
+                    shift.startTime = startInput.value;
+                    shift.endTime = endInput.value;
+                });
+
+                const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/business-hours/${bhId}`;
+                const payload = { ...originalBh, workingHours: updatedWorkingHours };
+
+                const response = await fetch(url, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${this.ctx.token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error(`Status ${response.status}`);
+                
+                originalBh.workingHours = updatedWorkingHours; // Update local state
+                this.showNotification(`Saved "${originalBh.name}"`, 'success');
 
             } catch (err) {
-                console.error('[GlobalVarManager] Save failed:', err);
-                this.showNotification(`Save Failed: ${err.message}`, 'error');
+                console.error(err);
+                this.showNotification(`Error: ${err.message}`, 'error');
             } finally {
                 btnElement.disabled = false;
                 btnElement.innerText = originalText;
@@ -218,14 +324,12 @@
             const toast = this.shadowRoot.getElementById('toast');
             toast.innerText = msg;
             toast.className = `show ${type}`;
-            setTimeout(() => { 
-                toast.className = toast.className.replace("show", ""); 
-            }, 3000);
+            setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
         }
     }
 
     if (!customElements.get('global-variable-manager')) {
         customElements.define('global-variable-manager', GlobalVariableManager);
-        console.log('Global Variable Manager registered.');
+        console.log(`Global Variable Manager ${VERSION} registered.`);
     }
 })();
