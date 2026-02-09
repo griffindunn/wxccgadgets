@@ -7,10 +7,10 @@ The gadgets are automatically hosted via GitHub Pages for easy integration into 
 Global Variable Manager (Supervisor Controls)
 A custom gadget that allows supervisors to manage global variables directly from the Agent Desktop. It leverages the WxCC Desktop SDK to securely interact with your organization's data.   
 
-Component Name: global-variable-manager
+Component Name: supervisor-controls
 
 Source Script:   
-https://griffindunn.github.io/wxccgadgets/gadgets/global-vars.js
+https://griffindunn.github.io/wxccgadgets/gadgets/SupervisorControls.js
 
 🛠 Installation & Configuration
 To use these gadgets, you must add them to your WxCC Desktop Layout JSON via the Management Portal.   
@@ -31,8 +31,8 @@ JSON
     "id": "SupervisorControls",
     "widgets": {
         "comp1": {
-            "comp": "global-variable-manager",
-            "script": "https://griffindunn.github.io/wxccgadgets/gadgets/global-vars.js",
+            "comp": "supervisor-controls",
+            "script": "https://griffindunn.github.io/wxccgadgets/gadgets/SupervisorControls.js",
             "attributes": {
                 "token": "$STORE.auth.accessToken",
                 "org-id": "$STORE.agent.orgId",
@@ -76,7 +76,3 @@ $STORE.agentContact.selectedTaskId: The ID of the call or chat currently in focu
 
 System Notifications ($STORE.generalNotifications)
 $STORE.generalNotifications.list: A list of active notifications currently displayed in the desktop's notification center.
-
-📂 Repository Structure
-/gadgets: Contains the JavaScript logic for custom components (e.g., global-vars.js).
-/styles: Contains global and gadget-specific CSS files (e.g., main.css).
