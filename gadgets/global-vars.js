@@ -1,12 +1,169 @@
 /* gadgets/global-vars.js */
 (function() {
-    // Phase 15: Fix Resize Constraint & Robust Dark Mode
-    const VERSION = "v3.8";
-    console.log(`Global Variable Manager ${VERSION} loading...`);
+    // Phase 16: Final Release (Optimized, Self-Contained, Secure)
+    const VERSION = "v3.9-Final";
+    
+    // OPTIMIZATION 1: Embedded CSS (Zero Dependencies)
+    // This prevents network lag and ensures the gadget works even if GitHub is blocked.
+    const CSS_STYLES = `
+        :host {
+            color-scheme: light dark;
+            --bg-app: #fff;
+            --bg-card: #fff;
+            --bg-header: #fcfcfc;
+            --bg-input: #fff;
+            --bg-shift-row: #f9f9f9;
+            --bg-shift-row-hover: #eef9fd;
+            --bg-edit-box: #f0fbff;
+            --bg-new-area: #fafafa;
+            --text-main: #333;
+            --text-sub: #555;
+            --text-desc: #777;
+            --text-input: #333;
+            --border-color: #dcdcdc;
+            --border-light: #eee;
+            --border-accent: #00bceb;
+            --color-primary: #00bceb;
+            --color-primary-hover: #00a0c6;
+            --color-success: #2fb16c;
+            --color-danger: #dc3545;
+            display: block;
+            font-family: "CiscoSans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+            background-color: var(--bg-app);
+            color: var(--text-main);
+            height: 100%;
+            overflow-y: auto;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        @media (prefers-color-scheme: dark) {
+            :host {
+                --bg-app: #121212;
+                --bg-card: #1e1e1e;
+                --bg-header: #252525;
+                --bg-input: #2c2c2c;
+                --bg-shift-row: #2a2a2a;
+                --bg-shift-row-hover: #333;
+                --bg-edit-box: #2c3e50;
+                --bg-new-area: #222;
+                --text-main: #e0e0e0;
+                --text-sub: #ccc;
+                --text-desc: #aaa;
+                --text-input: #fff;
+                --border-color: #444;
+                --border-light: #333;
+                --border-accent: #00bceb;
+            }
+        }
+        h2 { color: var(--color-primary); margin: 0 0 25px; font-weight: 300; }
+        h3.category-header {
+            width: 100%; margin: 30px 0 15px; font-size: 0.8rem; font-weight: 700;
+            text-transform: uppercase; color: var(--text-sub);
+            border-bottom: 1px solid var(--border-color); padding-bottom: 8px; letter-spacing: 1px;
+        }
+        #content { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; padding-bottom: 40px; }
+        .var-row {
+            background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;
+            padding: 16px; display: flex; align-items: flex-start; transition: box-shadow 0.2s;
+            flex: 0 0 auto; min-width: 300px;
+        }
+        .var-row:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .var-info { flex: 0 0 150px; margin-right: 20px; margin-top: 8px; }
+        .var-name { font-weight: 600; color: var(--text-main); font-size: 0.95rem; margin-bottom: 4px; display: block; }
+        .var-desc { font-size: 0.8rem; color: var(--text-desc); line-height: 1.4; }
+        .var-input-container { display: flex; gap: 8px; align-items: flex-start; flex: 1; }
+        textarea.var-input, select {
+            width: 100%; padding: 8px; border: 1px solid var(--border-color);
+            background-color: var(--bg-input); color: var(--text-input);
+            border-radius: 4px; font: inherit; min-height: 38px; resize: both; box-sizing: border-box;
+        }
+        .bh-card {
+            display: flex; flex-direction: column; background: var(--bg-card);
+            border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;
+            flex: 0 0 auto; min-width: 450px;
+        }
+        .bh-header {
+            background: var(--bg-header); padding: 15px 20px; border-bottom: 1px solid var(--border-light);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .bh-title { font-size: 1rem; font-weight: 600; color: var(--text-main); }
+        .bh-content { padding: 0; }
+        .bh-new-shift-area {
+            padding: 0 20px; border-bottom: 1px solid var(--border-light);
+            display: none; background-color: var(--bg-new-area);
+        }
+        .bh-new-shift-area.active { display: block; padding: 20px; }
+        .bh-day-group { border-bottom: 1px solid var(--border-light); padding: 12px 20px; }
+        .bh-day-group:last-child { border-bottom: none; }
+        .bh-day-name { font-size: 0.85rem; font-weight: 700; color: var(--text-sub); margin-bottom: 8px; }
+        .bh-day-shifts { display: flex; flex-direction: column; gap: 6px; }
+        .shift-row {
+            display: grid; grid-template-columns: 1fr 1fr; padding: 8px 12px;
+            background: var(--bg-shift-row); border-radius: 4px; cursor: pointer; font-size: 0.9rem;
+        }
+        .shift-row:hover { background: var(--bg-shift-row-hover); }
+        .shift-row-name { color: var(--color-primary); font-weight: 600; }
+        .shift-row-time { color: var(--text-desc); text-align: right; }
+        .shift-empty { font-size: 0.85rem; color: #999; font-style: italic; padding-left: 12px; }
+        .shift-edit-box {
+            background: var(--bg-edit-box); border: 1px solid var(--border-accent);
+            border-radius: 6px; padding: 15px; margin-top: 8px; display: flex; flex-direction: column; gap: 12px;
+        }
+        .bh-new-shift-area .shift-edit-box { margin-top: 0; background: var(--bg-card); }
+        .delete-confirm-view { text-align: center; padding: 20px 0; animation: fadeIn 0.2s ease-in; }
+        .edit-row { display: flex; gap: 15px; flex-wrap: wrap; }
+        .form-group { display: flex; flex-direction: column; gap: 4px; }
+        .form-label { font-size: 0.7rem; font-weight: 700; color: var(--text-sub); text-transform: uppercase; }
+        .edit-name, .edit-start, .edit-end {
+            background: var(--bg-input); color: var(--text-input);
+            border: 1px solid var(--border-color); padding: 5px; border-radius: 4px;
+        }
+        .day-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+        .day-pill {
+            padding: 5px 8px; border: 1px solid var(--border-color); background: var(--bg-input);
+            color: var(--text-input); border-radius: 4px; font-size: 0.75rem; cursor: pointer; user-select: none;
+        }
+        .day-pill:hover { background: var(--border-light); }
+        .day-pill.selected { background: var(--color-primary); color: white; border-color: var(--color-primary); }
+        .bh-save-bar {
+            padding: 15px 20px; background: var(--bg-new-area); border-top: 1px solid var(--border-color);
+            text-align: right; display: none;
+        }
+        .bh-save-bar.visible { display: block; animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .btn {
+            padding: 0 16px; height: 36px; border: none; border-radius: 18px;
+            font-weight: 600; font-size: 13px; cursor: pointer; transition: 0.2s;
+        }
+        .btn-primary { background: var(--color-primary); color: white; }
+        .btn-primary:hover { background: var(--color-primary-hover); }
+        .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-success { background: var(--color-success); color: white; }
+        .btn-success:hover { opacity: 0.9; }
+        .btn-black { background: #222; color: white; }
+        .btn-black:hover { background: #000; }
+        @media (prefers-color-scheme: dark) { .btn-black { background: #444; } .btn-black:hover { background: #555; } }
+        .btn-secondary { background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-main); }
+        .btn-secondary:hover { background: var(--border-light); }
+        .btn-danger { background: var(--color-danger); color: white; }
+        .btn-danger:hover { opacity: 0.9; }
+        .footer-version { position: fixed; bottom: 8px; left: 15px; font-size: 11px; color: var(--text-desc); pointer-events: none; }
+        #toast {
+            visibility: hidden; min-width: 300px; background-color: #333; color: #fff;
+            text-align: center; border-radius: 6px; padding: 16px;
+            position: fixed; z-index: 1000; left: 50%; bottom: 30px; transform: translateX(-50%);
+            opacity: 0; transition: opacity 0.3s;
+        }
+        #toast.show { visibility: visible; opacity: 1; bottom: 50px; }
+        #toast.success { background-color: var(--color-success); }
+        #toast.error { background-color: var(--color-danger); }
+        .loading { color: var(--text-desc); font-style: italic; display: flex; align-items: center; gap: 8px; }
+    `;
 
     const template = document.createElement('template');
     template.innerHTML = `
-      <style>@import url('https://griffindunn.github.io/wxccgadgets/styles/main.css');</style>
+      <style>${CSS_STYLES}</style>
       <div id="app">
           <h2>Supervisor Controls</h2>
           <div id="debug-info" style="font-size: 0.8em; color: var(--text-desc); margin-bottom: 10px; display: none;"></div>
@@ -95,11 +252,21 @@
             });
         }
 
+        // OPTIMIZATION 2: XSS Protection Helper
+        escapeHtml(str) {
+            if(!str) return '';
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
         render() {
             const contentDiv = this.shadowRoot.getElementById('content');
             contentDiv.innerHTML = '';
 
-            // 1. Render Variables
             const vars = [...this.data.variables].sort((a, b) => {
                 if (a.variableType < b.variableType) return -1;
                 if (a.variableType > b.variableType) return 1;
@@ -111,12 +278,11 @@
                 const type = (v.variableType || 'UNKNOWN').toUpperCase();
                 if (type !== currentType) {
                     currentType = type;
-                    contentDiv.insertAdjacentHTML('beforeend', `<h3 class="category-header">${currentType} Variables</h3>`);
+                    contentDiv.insertAdjacentHTML('beforeend', `<h3 class="category-header">${this.escapeHtml(currentType)} Variables</h3>`);
                 }
                 contentDiv.insertAdjacentHTML('beforeend', this.buildVariableCard(v));
             });
 
-            // 2. Render Business Hours
             if (this.data.businessHours.length > 0) {
                 contentDiv.insertAdjacentHTML('beforeend', `<h3 class="category-header">Business Hours</h3>`);
                 this.data.businessHours.forEach(bh => {
@@ -132,19 +298,22 @@
         buildVariableCard(v) {
             const vType = (v.variableType || '').toLowerCase();
             const isBool = (vType === 'boolean');
+            const safeName = this.escapeHtml(v.name);
+            const safeDesc = this.escapeHtml(v.description);
+            const safeVal = this.escapeHtml(v.defaultValue || '');
             
             const inputHtml = isBool 
                 ? `<select id="input-${v.id}">
                      <option value="true" ${String(v.defaultValue) === 'true' ? 'selected' : ''}>TRUE</option>
                      <option value="false" ${String(v.defaultValue) === 'false' ? 'selected' : ''}>FALSE</option>
                    </select>`
-                : `<textarea id="input-${v.id}" class="var-input" rows="1">${v.defaultValue || ''}</textarea>`;
+                : `<textarea id="input-${v.id}" class="var-input" rows="1">${safeVal}</textarea>`;
 
             return `
                 <div class="var-row">
                     <div class="var-info">
-                        <span class="var-name">${v.name}</span>
-                        ${v.description ? `<div class="var-desc">${v.description}</div>` : ''}
+                        <span class="var-name">${safeName}</span>
+                        ${v.description ? `<div class="var-desc">${safeDesc}</div>` : ''}
                     </div>
                     <div class="var-input-container">
                         ${inputHtml}
@@ -176,7 +345,7 @@
                 } else {
                     rowsHtml = activeShifts.map(s => `
                         <div class="shift-row" data-bh="${bh.id}" data-idx="${s.originalIndex}">
-                            <div class="shift-row-name">${s.name}</div>
+                            <div class="shift-row-name">${this.escapeHtml(s.name)}</div>
                             <div class="shift-row-time">${this.formatTime(s.startTime)} - ${this.formatTime(s.endTime)}</div>
                         </div>
                     `).join('');
@@ -193,8 +362,8 @@
             card.innerHTML = `
                 <div class="bh-header">
                     <div>
-                        <div class="bh-title">${bh.name}</div>
-                        ${bh.description ? `<div class="var-desc">${bh.description}</div>` : ''}
+                        <div class="bh-title">${this.escapeHtml(bh.name)}</div>
+                        ${bh.description ? `<div class="var-desc">${this.escapeHtml(bh.description)}</div>` : ''}
                     </div>
                     <button class="btn btn-black add-shift-btn" data-bh="${bh.id}">Add Shift</button>
                 </div>
@@ -221,7 +390,7 @@
             });
         }
 
-        // --- Add Shift UI ---
+        // --- NEW: Add Shift UI ---
         openAddShiftUI(bhId) {
             const container = this.shadowRoot.getElementById(`new-shift-container-${bhId}`);
             if (!container) return;
@@ -233,59 +402,34 @@
                 days: [] 
             };
             
-            // Render Edit Form
             container.innerHTML = this.getShiftEditHTML(defaultShift, true);
             container.classList.add('active');
 
-            // --- Handlers ---
-            const editBox = container.querySelector('.shift-edit-box');
-
-            editBox.querySelectorAll('.day-pill').forEach(t => {
-                t.addEventListener('click', (e) => {
-                    e.currentTarget.classList.toggle('selected');
-                    if(e.currentTarget.classList.contains('selected')) {
-                        e.currentTarget.innerHTML = `&#10003; ${e.currentTarget.dataset.day}`;
-                    } else {
-                        e.currentTarget.innerText = e.currentTarget.dataset.day;
-                    }
-                });
-            });
-
-            // Cancel
-            editBox.querySelector('.cancel-edit-btn').addEventListener('click', () => {
-                container.innerHTML = '';
-                container.classList.remove('active');
-            });
-
-            // Confirm
-            editBox.querySelector('.confirm-edit-btn').addEventListener('click', () => {
-                const name = editBox.querySelector('.edit-name').value;
-                const start = editBox.querySelector('.edit-start').value;
-                const end = editBox.querySelector('.edit-end').value;
-                const days = Array.from(editBox.querySelectorAll('.day-pill.selected')).map(el => el.dataset.day);
-
-                const validation = this.validateShift(name, start, end, days);
-                if (validation) { this.showNotification(validation, 'error'); return; }
-
-                const conflict = this.checkConflicts({ name, startTime: start, endTime: end, days }, this.editState[bhId]);
-                if (conflict) { this.showNotification(conflict, 'error'); return; }
-
-                this.editState[bhId].push({ name, startTime: start, endTime: end, days });
-                this.hasChanges[bhId] = true;
-                this.render();
-            });
+            this.attachShiftEditHandlers(container, bhId, -1);
         }
 
         // --- Edit Existing Shift UI ---
         openEditShiftUI(bhId, idx, rowEl) {
             const shift = this.editState[bhId][idx];
             
-            // Insert after row
             rowEl.insertAdjacentHTML('afterend', this.getShiftEditHTML(shift, false));
             const editBox = rowEl.nextElementSibling;
-            rowEl.style.display = 'none'; // Hide row
+            rowEl.style.display = 'none';
 
-            // Handlers
+            // Cancel special handler to restore row
+            editBox.querySelector('.cancel-edit-btn').addEventListener('click', () => {
+                editBox.remove();
+                rowEl.style.display = 'grid';
+            }, { once: true }); // Important optimization: Only runs once
+
+            this.attachShiftEditHandlers(editBox, bhId, idx, rowEl);
+        }
+
+        // Shared Handlers Logic
+        attachShiftEditHandlers(container, bhId, idx, rowEl = null) {
+            const editBox = container.querySelector('.shift-edit-box');
+
+            // Day Pills
             editBox.querySelectorAll('.day-pill').forEach(t => {
                 t.addEventListener('click', (e) => {
                     e.currentTarget.classList.toggle('selected');
@@ -297,11 +441,13 @@
                 });
             });
 
-            // Cancel
-            editBox.querySelector('.cancel-edit-btn').addEventListener('click', () => {
-                editBox.remove();
-                rowEl.style.display = 'grid';
-            });
+            // Cancel (For Add Mode - Edit Mode handled separately)
+            if(idx === -1) {
+                editBox.querySelector('.cancel-edit-btn').addEventListener('click', () => {
+                    container.innerHTML = '';
+                    container.classList.remove('active');
+                });
+            }
 
             // Delete
             const deleteBtn = editBox.querySelector('.delete-shift-btn');
@@ -345,12 +491,17 @@
                 if (validation) { this.showNotification(validation, 'error'); return; }
 
                 const tempShifts = [...this.editState[bhId]];
-                const otherShifts = tempShifts.filter((_, i) => i != idx);
+                const otherShifts = idx === -1 ? tempShifts : tempShifts.filter((_, i) => i != idx);
                 
                 const conflict = this.checkConflicts({ name, startTime: start, endTime: end, days }, otherShifts);
                 if (conflict) { this.showNotification(conflict, 'error'); return; }
 
-                this.editState[bhId][idx] = { name, startTime: start, endTime: end, days };
+                if(idx === -1) {
+                    this.editState[bhId].push({ name, startTime: start, endTime: end, days });
+                } else {
+                    this.editState[bhId][idx] = { name, startTime: start, endTime: end, days };
+                }
+                
                 this.hasChanges[bhId] = true;
                 this.render();
             });
@@ -358,6 +509,7 @@
 
         getShiftEditHTML(shift, isNew) {
             const allDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+            const safeName = this.escapeHtml(shift.name || '');
             
             const deleteBtnHtml = isNew 
                 ? '<div></div>' 
@@ -369,7 +521,7 @@
                         <div class="edit-row">
                             <div class="form-group">
                                 <span class="form-label">Name</span>
-                                <input type="text" class="edit-name" value="${shift.name || ''}" style="width:180px;">
+                                <input type="text" class="edit-name" value="${safeName}" style="width:180px;">
                             </div>
                             <div class="form-group">
                                 <span class="form-label">Time Duration</span>
@@ -506,11 +658,15 @@
             return [...days].sort((a,b) => map[a] - map[b]).map(d => d.substring(0,3)).join(', ');
         }
 
+        // OPTIMIZATION 3: Faster Time Formatting
+        // Replaced expensive Date object creation with simple string parsing.
         formatTime(t) {
             if (!t) return '';
             const [h, m] = t.split(':');
-            const d = new Date(); d.setHours(h); d.setMinutes(m);
-            return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            const hour = parseInt(h, 10);
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            const hour12 = hour % 12 || 12;
+            return `${hour12}:${m} ${ampm}`;
         }
 
         showNotification(msg, type) {
