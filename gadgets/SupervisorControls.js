@@ -1,12 +1,13 @@
 /* FILENAME: SupervisorControls.js
-   DESCRIPTION: A Webex Contact Center gadget for Supervisors.
-   VERSION: v4.5-FinalFix (Strict Alignment, Hardened Logic, Fixed-Width Selects)
+   DESCRIPTION: A Webex Contact Center gadget for Supervisors to manage 
+                Global Variables and Business Hours (Shifts) directly from the desktop.
+   VERSION: v4.6-Restored (Features 1, 2, & 3 applied to clean base)
 */
 
 (function() {
-    const VERSION = "v4.5-FinalFix";
+    const VERSION = "v4.6-Restored";
     
-    // --- CSS STYLES ---
+    // --- STYLING SECTION (CSS) ---
     const CSS_STYLES = `
         :host {
             color-scheme: light dark;
@@ -33,62 +34,57 @@
             }
         }
 
+        h2 { color: var(--color-primary); margin: 0 0 25px; font-weight: 300; }
+        
         h3.category-header {
             width: 100%; margin: 30px 0 15px; font-size: 0.8rem; font-weight: 700;
             text-transform: uppercase; color: var(--text-sub);
             border-bottom: 1px solid var(--border-color); padding-bottom: 8px; letter-spacing: 1px;
         }
 
-        /* --- STRICT TABLE LAYOUT FOR VARIABLES --- */
-        /* This enforces perfect alignment columns */
-        .vars-grid {
-            display: grid;
-            /* 3 Columns: Label (Fixed), Input (Flexible), Button (Fixed) */
-            grid-template-columns: 200px 1fr 80px; 
-            gap: 15px;
-            align-items: center;
-            margin-bottom: 20px;
-        }
+        /* Container for all the cards */
+        #content { display: block; padding-bottom: 40px; }
         
-        /* The row container */
-        .var-row-strict {
-            display: contents; /* Allows children to participate in the main grid */
+        /* Wrappers for specific sections to allow flex layout within them */
+        .section-wrapper { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+
+        .var-row {
+            background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;
+            padding: 16px; display: flex; align-items: flex-start; transition: box-shadow 0.2s;
+            flex: 0 0 auto; min-width: 300px;
         }
+        .var-row:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
         
-        .var-label-cell {
-            font-weight: 600; font-size: 0.9rem; color: var(--text-main);
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-            padding: 8px 0;
-        }
-
-        .var-input-cell { display: flex; align-items: center; }
-
-        .var-input, textarea.var-input, input[type="number"] {
+        .var-info { flex: 0 0 150px; margin-right: 20px; margin-top: 8px; }
+        .var-name { font-weight: 600; color: var(--text-main); font-size: 0.95rem; margin-bottom: 4px; display: block; }
+        .var-desc { font-size: 0.8rem; color: var(--text-desc); line-height: 1.4; }
+        
+        .var-input-container { display: flex; gap: 8px; align-items: flex-start; flex: 1; }
+        
+        /* Updated Input Styles to support number inputs */
+        .var-input, textarea.var-input, select, input[type="number"] {
             width: 100%; padding: 8px; border: 1px solid var(--border-color);
             background-color: var(--bg-input); color: var(--text-input);
-            border-radius: 4px; font: inherit; min-height: 36px; box-sizing: border-box;
+            border-radius: 4px; font: inherit; min-height: 38px; box-sizing: border-box;
         }
+        textarea.var-input { resize: both; }
 
-        /* DROPDOWN FIX: Fixed width forces arrow close to text */
-        select.var-input {
-            width: 85px; /* Rigid width */
-            padding: 4px;
-            cursor: pointer;
-        }
-
-        /* --- BUSINESS HOURS --- */
         .bh-card {
             display: flex; flex-direction: column; background: var(--bg-card);
             border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;
-            margin-bottom: 20px;
+            flex: 0 0 auto; min-width: 450px; margin-bottom: 20px;
         }
         .bh-header {
             background: var(--bg-header); padding: 15px 20px; border-bottom: 1px solid var(--border-light);
             display: flex; justify-content: space-between; align-items: center;
         }
         .bh-title { font-size: 1rem; font-weight: 600; color: var(--text-main); }
-        
-        .bh-new-shift-area { display: none; background-color: var(--bg-new-area); border-bottom: 1px solid var(--border-light); }
+        .bh-content { padding: 0; }
+
+        .bh-new-shift-area {
+            padding: 0 20px; border-bottom: 1px solid var(--border-light);
+            display: none; background-color: var(--bg-new-area);
+        }
         .bh-new-shift-area.active { display: block; padding: 20px; }
 
         .bh-day-group { border-bottom: 1px solid var(--border-light); padding: 12px 20px; }
@@ -109,7 +105,10 @@
             background: var(--bg-edit-box); border: 1px solid var(--border-accent);
             border-radius: 6px; padding: 15px; margin-top: 8px; display: flex; flex-direction: column; gap: 12px;
         }
+        .bh-new-shift-area .shift-edit-box { margin-top: 0; background: var(--bg-card); }
         
+        .delete-confirm-view { text-align: center; padding: 20px 0; animation: fadeIn 0.2s ease-in; }
+
         .edit-row { display: flex; gap: 15px; flex-wrap: wrap; }
         .form-group { display: flex; flex-direction: column; gap: 4px; }
         .form-label { font-size: 0.7rem; font-weight: 700; color: var(--text-sub); text-transform: uppercase; }
@@ -131,20 +130,30 @@
             text-align: right; display: none;
         }
         .bh-save-bar.visible { display: block; animation: slideUp 0.3s ease-out; }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        .btn { padding: 0 16px; height: 36px; border: none; border-radius: 4px; font-weight: 600; font-size: 13px; cursor: pointer; transition: 0.2s; }
-        .btn-primary { background: var(--color-primary); color: white; border-radius: 18px; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .btn {
+            padding: 0 16px; height: 36px; border: none; border-radius: 18px;
+            font-weight: 600; font-size: 13px; cursor: pointer; transition: 0.2s;
+        }
+        .btn-primary { background: var(--color-primary); color: white; }
         .btn-primary:hover { background: var(--color-primary-hover); }
         .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
-        .btn-success { background: var(--color-success); color: white; border-radius: 18px; }
+        
+        .btn-success { background: var(--color-success); color: white; }
         .btn-success:hover { opacity: 0.9; }
-        .btn-black { background: #222; color: white; border-radius: 18px; }
+        
+        .btn-black { background: #222; color: white; }
         .btn-black:hover { background: #000; }
-        @media (prefers-color-scheme: dark) { .btn-black { background: #444; } }
-        .btn-secondary { background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 18px; }
+        @media (prefers-color-scheme: dark) { .btn-black { background: #444; } .btn-black:hover { background: #555; } }
+        
+        .btn-secondary { background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-main); }
         .btn-secondary:hover { background: var(--border-light); }
-        .btn-danger { background: var(--color-danger); color: white; border-radius: 18px; }
+        
+        .btn-danger { background: var(--color-danger); color: white; }
+        .btn-danger:hover { opacity: 0.9; }
 
         .footer-version { position: fixed; bottom: 8px; left: 15px; font-size: 11px; color: var(--text-desc); pointer-events: none; }
         #toast {
@@ -159,10 +168,12 @@
         .loading { color: var(--text-desc); font-style: italic; display: flex; align-items: center; gap: 8px; }
     `;
 
+    // --- HTML TEMPLATE ---
     const template = document.createElement('template');
     template.innerHTML = `
       <style>${CSS_STYLES}</style>
       <div id="app">
+          <h2>Supervisor Controls</h2>
           <div id="debug-info" style="font-size: 0.8em; color: var(--text-desc); margin-bottom: 10px; display: none;"></div>
           <div id="content">
               <div id="variables-container"></div>
@@ -219,16 +230,19 @@
 
         async loadAllData() {
             const contentDiv = this.shadowRoot.getElementById('content');
+            // Initial load message
             if(!this.data.variables.length && !this.data.businessHours.length) {
                 contentDiv.innerHTML = '<div class="loading"><span>Loading Data...</span></div>';
             }
+
             try {
                 await Promise.all([this.loadVariables(), this.loadBusinessHours()]);
+                // Restore structure after loading
                 contentDiv.innerHTML = `
                     <div id="variables-container"></div>
                     <div id="bh-container" style="margin-top: 30px;"></div>
                 `;
-                this.render(); 
+                this.render();
             } catch (err) {
                 console.error('[SupervisorControls] Load failed:', err);
                 contentDiv.innerHTML = `<div style="color:var(--color-danger)">Error loading data: ${err.message}</div>`;
@@ -263,12 +277,12 @@
             return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
 
+        // --- FEATURE #1: SPLIT RENDERING ---
         render() {
             this.renderVariables();
             this.renderBusinessHours();
         }
 
-        // --- NEW RENDERER: Uses Grid Table for Strict Alignment ---
         renderVariables() {
             const container = this.shadowRoot.getElementById('variables-container');
             if(!container) return; 
@@ -281,57 +295,27 @@
             });
 
             let currentType = '';
-            let currentGrid = null;
+            // Create a wrapper for flex layout logic inside variables container
+            let currentWrapper = document.createElement('div');
+            currentWrapper.className = 'section-wrapper';
 
             vars.forEach(v => {
                 const type = (v.variableType || 'UNKNOWN').toUpperCase();
                 if (type !== currentType) {
+                    if (currentType !== '') container.appendChild(currentWrapper);
                     currentType = type;
                     container.insertAdjacentHTML('beforeend', `<h3 class="category-header">${this.escapeHtml(currentType)} Variables</h3>`);
-                    
-                    // Create a new grid container for this category
-                    currentGrid = document.createElement('div');
-                    currentGrid.className = 'vars-grid';
-                    container.appendChild(currentGrid);
+                    currentWrapper = document.createElement('div');
+                    currentWrapper.className = 'section-wrapper';
                 }
-                
-                // Inject Row directly into the Grid
-                currentGrid.insertAdjacentHTML('beforeend', this.buildVariableRowStrict(v));
+                currentWrapper.insertAdjacentHTML('beforeend', this.buildVariableCard(v));
             });
+            container.appendChild(currentWrapper);
 
-            // Attach Listeners
+            // Attach listeners specific to variables
             container.querySelectorAll('.save-var-btn').forEach(b => 
                 b.addEventListener('click', e => this.handleSaveVariable(e.target.dataset.id, e.target))
             );
-        }
-
-        // Builder for Strict Row
-        buildVariableRowStrict(v) {
-            const vType = (v.variableType || '').toUpperCase();
-            const safeName = this.escapeHtml(v.name);
-            const safeVal = this.escapeHtml(v.defaultValue || '');
-            
-            let inputHtml = '';
-            if (vType === 'BOOLEAN') {
-                inputHtml = `
-                   <select id="input-${v.id}" class="var-input">
-                     <option value="true" ${String(v.defaultValue) === 'true' ? 'selected' : ''}>TRUE</option>
-                     <option value="false" ${String(v.defaultValue) === 'false' ? 'selected' : ''}>FALSE</option>
-                   </select>`;
-            } else if (vType === 'NUMBER' || vType === 'INTEGER') {
-                inputHtml = `<input type="number" id="input-${v.id}" class="var-input" value="${safeVal}">`;
-            } else {
-                inputHtml = `<textarea id="input-${v.id}" class="var-input" rows="1">${safeVal}</textarea>`;
-            }
-
-            return `
-                <div class="var-row-strict">
-                    <div class="var-label-cell" title="${safeName}">${safeName}</div>
-                    <div class="var-input-cell">${inputHtml}</div>
-                    <div class="var-btn-cell">
-                        <button class="btn btn-primary save-var-btn" data-id="${v.id}">Save</button>
-                    </div>
-                </div>`;
         }
 
         renderBusinessHours() {
@@ -341,24 +325,68 @@
 
             if (this.data.businessHours.length > 0) {
                 container.insertAdjacentHTML('beforeend', `<h3 class="category-header">Business Hours</h3>`);
+                const wrapper = document.createElement('div');
+                wrapper.className = 'section-wrapper';
+                
                 this.data.businessHours.forEach(bh => {
                     const shifts = this.editState[bh.id] || [];
                     const isDirty = this.hasChanges[bh.id];
-                    container.appendChild(this.buildBusinessHoursCard(bh, shifts, isDirty));
+                    wrapper.appendChild(this.buildBusinessHoursCard(bh, shifts, isDirty));
                 });
+                container.appendChild(wrapper);
             }
+
+            // Attach listeners specific to business hours
             this.attachBusinessHoursListeners(container);
+        }
+
+        // --- FEATURE #2: NUMBER INPUT SUPPORT ---
+        buildVariableCard(v) {
+            const vType = (v.variableType || '').toUpperCase();
+            const safeName = this.escapeHtml(v.name);
+            const safeDesc = this.escapeHtml(v.description);
+            const safeVal = this.escapeHtml(v.defaultValue || '');
+            
+            let inputHtml = '';
+
+            if (vType === 'BOOLEAN') {
+                inputHtml = `
+                   <select id="input-${v.id}" class="var-input">
+                     <option value="true" ${String(v.defaultValue) === 'true' ? 'selected' : ''}>TRUE</option>
+                     <option value="false" ${String(v.defaultValue) === 'false' ? 'selected' : ''}>FALSE</option>
+                   </select>`;
+            } else if (vType === 'NUMBER' || vType === 'INTEGER') {
+                // FEATURE #2: Render Number Input
+                inputHtml = `<input type="number" id="input-${v.id}" class="var-input" value="${safeVal}">`;
+            } else {
+                inputHtml = `<textarea id="input-${v.id}" class="var-input" rows="1">${safeVal}</textarea>`;
+            }
+
+            return `
+                <div class="var-row">
+                    <div class="var-info">
+                        <span class="var-name">${safeName}</span>
+                        ${v.description ? `<div class="var-desc">${safeDesc}</div>` : ''}
+                    </div>
+                    <div class="var-input-container">
+                        ${inputHtml}
+                        <button class="btn btn-primary save-var-btn" data-id="${v.id}">Save</button>
+                    </div>
+                </div>`;
         }
 
         buildBusinessHoursCard(bh, shifts, isDirty) {
             const card = document.createElement('div');
             card.className = 'bh-card';
+            
             const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
             const shortDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+            
             let daysHtml = '';
 
             daysOfWeek.forEach((dayName, dayIndex) => {
                 const dayCode = shortDays[dayIndex];
+                
                 const activeShifts = shifts
                     .map((s, idx) => ({ ...s, originalIndex: idx }))
                     .filter(s => s.days && s.days.includes(dayCode))
@@ -375,16 +403,21 @@
                         </div>
                     `).join('');
                 }
+
                 daysHtml += `
                     <div class="bh-day-group">
                         <div class="bh-day-name">${dayName}</div>
                         <div class="bh-day-shifts">${rowsHtml}</div>
-                    </div>`;
+                    </div>
+                `;
             });
 
             card.innerHTML = `
                 <div class="bh-header">
-                    <div class="bh-title">${this.escapeHtml(bh.name)}</div>
+                    <div>
+                        <div class="bh-title">${this.escapeHtml(bh.name)}</div>
+                        ${bh.description ? `<div class="var-desc">${this.escapeHtml(bh.description)}</div>` : ''}
+                    </div>
                     <button class="btn btn-black add-shift-btn" data-bh="${bh.id}">Add Shift</button>
                 </div>
                 <div id="new-shift-container-${bh.id}" class="bh-new-shift-area"></div>
@@ -409,25 +442,115 @@
         openAddShiftUI(bhId) {
             const container = this.shadowRoot.getElementById(`new-shift-container-${bhId}`);
             if (!container) return;
+
             const defaultShift = { name: "New Shift", startTime: "09:00", endTime: "17:00", days: [] };
             container.innerHTML = this.getShiftEditHTML(defaultShift, true);
             container.classList.add('active');
-            this.setupEditForm(container, bhId, -1);
+
+            this.attachShiftEditHandlers(container, bhId, -1);
         }
 
         openEditShiftUI(bhId, idxString, rowEl) {
             const idx = parseInt(idxString, 10);
             const shift = this.editState[bhId][idx];
+            
             rowEl.insertAdjacentHTML('afterend', this.getShiftEditHTML(shift, false));
             const editBox = rowEl.nextElementSibling;
             rowEl.style.display = 'none'; 
-            
+
             editBox.querySelector('.cancel-edit-btn').addEventListener('click', () => {
                 editBox.remove();
                 rowEl.style.display = 'grid';
             }, { once: true });
-            
-            this.setupEditForm(editBox, bhId, idx, rowEl);
+
+            this.attachShiftEditHandlers(editBox, bhId, idx, rowEl);
+        }
+
+        attachShiftEditHandlers(container, bhId, idx, rowEl = null) {
+            const editBox = container.querySelector('.shift-edit-box');
+
+            editBox.querySelectorAll('.day-pill').forEach(t => {
+                t.addEventListener('click', (e) => {
+                    e.currentTarget.classList.toggle('selected');
+                    if(e.currentTarget.classList.contains('selected')) {
+                        e.currentTarget.innerHTML = `&#10003; ${e.currentTarget.dataset.day}`;
+                    } else {
+                        e.currentTarget.innerText = e.currentTarget.dataset.day;
+                    }
+                });
+            });
+
+            if(idx === -1) {
+                editBox.querySelector('.cancel-edit-btn').addEventListener('click', () => {
+                    container.innerHTML = '';
+                    container.classList.remove('active');
+                });
+            }
+
+            const deleteBtn = editBox.querySelector('.delete-shift-btn');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', () => {
+                    const normalView = editBox.querySelector('.edit-normal-view');
+                    normalView.style.display = 'none';
+
+                    const confirmHtml = `
+                        <div class="delete-confirm-view">
+                            <div style="margin-bottom: 15px; font-weight:600; color: var(--text-main);">Are you sure you want to delete this shift?</div>
+                            <div style="display:flex; justify-content:center; gap:10px;">
+                                <button class="btn btn-secondary cancel-del-btn">No, Keep it</button>
+                                <button class="btn btn-danger confirm-del-btn">Yes, Delete</button>
+                            </div>
+                        </div>`;
+                    editBox.insertAdjacentHTML('beforeend', confirmHtml);
+
+                    editBox.querySelector('.cancel-del-btn').addEventListener('click', () => {
+                        editBox.querySelector('.delete-confirm-view').remove();
+                        normalView.style.display = 'block';
+                    });
+
+                    editBox.querySelector('.confirm-del-btn').addEventListener('click', () => {
+                        this.editState[bhId].splice(idx, 1);
+                        this.hasChanges[bhId] = true;
+                        this.renderBusinessHours(); // Feature #1: Only re-render BH
+                    });
+                });
+            }
+
+            // --- FEATURE #3: VALIDATION AND SAVE ---
+            editBox.querySelector('.confirm-edit-btn').addEventListener('click', () => {
+                const name = editBox.querySelector('.edit-name').value.trim();
+                const start = editBox.querySelector('.edit-start').value;
+                const end = editBox.querySelector('.edit-end').value;
+                const days = Array.from(editBox.querySelectorAll('.day-pill.selected')).map(el => el.dataset.day);
+
+                // 1. Basic Validation
+                const validation = this.validateShift(name, start, end, days);
+                if (validation) { this.showNotification(validation, 'error'); return; }
+
+                const tempShifts = [...this.editState[bhId]];
+                const otherShifts = idx === -1 ? tempShifts : tempShifts.filter((_, i) => i !== idx);
+
+                // FEATURE #3: Duplicate Name Check
+                const isDuplicate = otherShifts.some(s => (s.name || '').trim().toLowerCase() === name.toLowerCase());
+                if (isDuplicate) { 
+                    this.showNotification(`Error: Shift name "${name}" already exists.`, 'error'); 
+                    return; 
+                }
+
+                // 2. Conflict Check
+                const conflict = this.checkConflicts({ name, startTime: start, endTime: end, days }, otherShifts);
+                if (conflict) { this.showNotification(conflict, 'error'); return; }
+
+                // 3. Save
+                if(idx === -1) {
+                    this.editState[bhId].push({ name, startTime: start, endTime: end, days });
+                } else {
+                    this.editState[bhId][idx] = { name, startTime: start, endTime: end, days };
+                }
+                
+                this.hasChanges[bhId] = true;
+                this.renderBusinessHours(); // Feature #1: Only re-render BH
+            });
         }
 
         getShiftEditHTML(shift, isNew) {
@@ -473,94 +596,25 @@
                 </div>`;
         }
 
-        // --- NEW LOGIC: Centralized Edit Handler with Safety Checks ---
-        setupEditForm(container, bhId, idx, rowEl = null) {
-            const editBox = container.querySelector('.shift-edit-box');
-
-            // Day Selection
-            editBox.querySelectorAll('.day-pill').forEach(t => {
-                t.addEventListener('click', (e) => {
-                    e.currentTarget.classList.toggle('selected');
-                    if(e.currentTarget.classList.contains('selected')) {
-                        e.currentTarget.innerHTML = `&#10003; ${e.currentTarget.dataset.day}`;
-                    } else {
-                        e.currentTarget.innerText = e.currentTarget.dataset.day;
-                    }
-                });
-            });
-
-            // Cancel (If New)
-            if(idx === -1) {
-                editBox.querySelector('.cancel-edit-btn').addEventListener('click', () => {
-                    container.innerHTML = '';
-                    container.classList.remove('active');
-                });
-            }
-
-            // Delete Logic
-            const deleteBtn = editBox.querySelector('.delete-shift-btn');
-            if (deleteBtn) {
-                deleteBtn.addEventListener('click', () => {
-                    if(!confirm("Are you sure you want to delete this shift?")) return;
-                    this.editState[bhId].splice(idx, 1);
-                    this.hasChanges[bhId] = true;
-                    this.renderBusinessHours();
-                });
-            }
-
-            // "DONE" Button Logic
-            editBox.querySelector('.confirm-edit-btn').addEventListener('click', () => {
-                try {
-                    const name = editBox.querySelector('.edit-name').value.trim();
-                    const start = editBox.querySelector('.edit-start').value;
-                    const end = editBox.querySelector('.edit-end').value;
-                    const days = Array.from(editBox.querySelectorAll('.day-pill.selected')).map(el => el.dataset.day);
-
-                    // Validation
-                    if (!name) throw new Error("Name is required.");
-                    if (days.length === 0) throw new Error("Select at least one day.");
-                    if (!start || !end) throw new Error("Start and End times required.");
-                    if (start >= end) throw new Error("Start time must be before End time.");
-
-                    // Conflict Check (Filtered correctly)
-                    const tempShifts = this.editState[bhId];
-                    const otherShifts = tempShifts.filter((_, i) => i !== idx);
-
-                    // Duplicate Name Check
-                    if (otherShifts.some(s => (s.name || '').trim().toLowerCase() === name.toLowerCase())) {
-                        throw new Error(`Name "${name}" is already used.`);
-                    }
-
-                    // Overlap Check
-                    const conflict = this.checkConflicts({ name, startTime: start, endTime: end, days }, otherShifts);
-                    if (conflict) throw new Error(conflict);
-
-                    // Commit Changes
-                    if(idx === -1) {
-                        this.editState[bhId].push({ name, startTime: start, endTime: end, days });
-                    } else {
-                        this.editState[bhId][idx] = { name, startTime: start, endTime: end, days };
-                    }
-                    
-                    this.hasChanges[bhId] = true;
-                    this.renderBusinessHours();
-
-                } catch (e) {
-                    this.showNotification(e.message, 'error');
-                }
-            });
+        validateShift(name, start, end, days) {
+            if (!name) return "Name is required.";
+            if (days.length === 0) return "Select at least one day.";
+            if (!start || !end) return "Start and End times required.";
+            if (start >= end) return "Start time must be before End time.";
+            return null;
         }
 
         checkConflicts(candidate, existingShifts) {
             const cStart = parseInt(candidate.startTime.replace(':', ''));
             const cEnd = parseInt(candidate.endTime.replace(':', ''));
+
             for (const day of candidate.days) {
                 const dayShifts = existingShifts.filter(s => s.days.includes(day));
                 for (const existing of dayShifts) {
                     const eStart = parseInt(existing.startTime.replace(':', ''));
                     const eEnd = parseInt(existing.endTime.replace(':', ''));
                     if (cStart < eEnd && cEnd > eStart) {
-                        return `Overlap: ${day} with "${existing.name}"`;
+                        return `Overlap detected on ${day} with "${existing.name}"`;
                     }
                 }
             }
@@ -571,9 +625,11 @@
             const originalText = btnElement.innerText;
             btnElement.disabled = true;
             btnElement.innerText = "Saving...";
+
             const finalShifts = this.editState[bhId];
             const originalBh = this.data.businessHours.find(b => b.id === bhId);
             const payload = { ...originalBh, workingHours: finalShifts };
+
             try {
                 const v2Url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/business-hours/${bhId}`;
                 let res = await fetch(v2Url, {
@@ -581,6 +637,7 @@
                     headers: { 'Authorization': `Bearer ${this.ctx.token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
+
                 if (res.status === 404) {
                     const v1Url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/business-hours/${bhId}`;
                     res = await fetch(v1Url, {
@@ -589,14 +646,17 @@
                         body: JSON.stringify(payload)
                     });
                 }
+
                 if (!res.ok) {
                     const txt = await res.text();
                     throw new Error(`API Error ${res.status}: ${txt}`);
                 }
+                
                 originalBh.workingHours = JSON.parse(JSON.stringify(finalShifts));
                 this.hasChanges[bhId] = false;
                 this.showNotification(`Saved "${originalBh.name}"`, 'success');
-                this.renderBusinessHours();
+                this.renderBusinessHours(); // Feature #1: Only re-render BH
+
             } catch (err) {
                 this.showNotification(`Save Failed: ${err.message}`, 'error');
                 btnElement.disabled = false;
@@ -610,13 +670,17 @@
             const originalText = btnElement.innerText;
             btnElement.disabled = true;
             btnElement.innerText = "...";
+
             const originalVar = this.data.variables.find(v => v.id === varId);
             const vType = (originalVar.variableType || '').toUpperCase();
+            
+            // FEATURE #2: Parse Number/Integer correctly
             if (vType === 'BOOLEAN') {
                 newValue = (newValue === 'true');
             } else if (vType === 'NUMBER' || vType === 'INTEGER') {
                 newValue = Number(newValue);
             }
+
             try {
                 const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/cad-variable/${varId}`;
                 const payload = { ...originalVar, id: varId, defaultValue: newValue };
