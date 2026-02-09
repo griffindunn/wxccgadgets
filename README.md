@@ -1,57 +1,49 @@
-WxCC Gadgets
-This repository hosts a collection of custom gadgets and styles for the Webex Contact Center (WxCC) Agent Desktop. These gadgets are designed to extend the functionality of the desktop, providing supervisors and agents with custom controls and data management tools.   
+# Supervisor Controls Gadget for Webex Contact Center
 
-The gadgets are automatically hosted via GitHub Pages for easy integration into your WxCC Desktop Layouts.   
+**Supervisor Controls** is a custom desktop gadget that allows Webex Contact Center supervisors to view and update **Global Variables** and **Business Hour Calendars** directly from the Supervisor Desktop.
 
-🚀 Featured Gadgets
-Global Variable Manager (Supervisor Controls)
-A custom gadget that allows supervisors to manage global variables directly from the Agent Desktop. It leverages the WxCC Desktop SDK to securely interact with your organization's data.   
+## Features
+* **Global Variables:** View, edit, and save String, Boolean, and Number variables.
+* **Business Hours:** Visually manage open/close times and shifts.
+* **Conflict Detection:** Automatically prevents overlapping shifts.
+* **Single-File Deployment:** CSS styles are embedded within the JavaScript for easier hosting and faster loading.
+* **Dark Mode Support:** Automatically adjusts to the agent's desktop theme.
 
-Component Name: supervisor-controls
+## Files
+* `SupervisorControls.min.js` - The only file you need to upload. (Contains both logic and styles).
 
-Source Script:   
-https://griffindunn.github.io/wxccgadgets/gadgets/SupervisorControls.js
+## Installation Guide
 
-🛠 Installation & Configuration
-To use these gadgets, you must add them to your WxCC Desktop Layout JSON via the Management Portal.   
+### 1. Hosting
+1.  Download `SupervisorControls.min.js`.
+2.  Upload this file to your preferred hosting provider (GitHub Pages, AWS S3, or your internal web server).
+3.  **Note the URL** (e.g., `https://your-domain.com/gadgets/SupervisorControls.min.js`).
 
-Example Configuration
-Use the following snippet to add the Supervisor Controls tab to your navigation bar and define the gadget on its own page:   
+### 2. Webex Control Hub Configuration
+1.  Log in to **Webex Control Hub**.
+2.  Navigate to **Contact Center** > **Desktop Layout**.
+3.  Select the layout assigned to your Supervisors (or create a new one).
+4.  Download the JSON layout file.
+5.  Add the following widget configuration to your layout JSON (usually under the `header` or a dedicated `tab`):
 
-JSON
+```json
 {
-  "nav": {
-    "label": "Supervisor Controls",
-    "icon": "settings",
-    "iconType": "momentum",
-    "navigateTo": "SupervisorControls",
-    "align": "top"
-  },
-  "page": {
-    "id": "SupervisorControls",
-    "widgets": {
-        "comp1": {
-            "comp": "supervisor-controls",
-            "script": "https://griffindunn.github.io/wxccgadgets/gadgets/SupervisorControls.js",
-            "attributes": {
-                "token": "$STORE.auth.accessToken",
-                "org-id": "$STORE.agent.orgId",
-                "data-center": "$STORE.app.datacenter"
-            },
-            "wrapper": {
-                "title": "Supervisor Controls",
-                "maximizeAreaName": "app-maximize-area"
-            }
-        }
+    "comp": "supervisor-controls",
+    "script": "[https://your-domain.com/gadgets/SupervisorControls.min.js](https://your-domain.com/gadgets/SupervisorControls.min.js)",
+    "attributes": {
+        "token": "$STORE.auth.accessToken",
+        "org-id": "$STORE.agent.orgId",
+        "data-center": "$STORE.app.datacenter"
     },
-    "layout": {
-      "areas": [["comp1"]],
-      "size": { "cols": [1], "rows": [1] }
+    "wrapper": {
+        "title": "Supervisor Controls",
+        "maximizeAreaName": "app-maximize-area"
     }
-  }
 }
+
 🔑 Desktop Store Attributes ($STORE)
-The Agent Desktop provides a global $STORE object that allows gadgets to access real-time context. Below are the attributes available for mapping in your layout JSON:
+The Agent Desktop provides a global $STORE object that allows gadgets to access real-time context.
+Below are the attributes available for mapping in your layout JSON:
 
 Authentication ($STORE.auth)
 $STORE.auth.accessToken: The bearer token used for authenticated REST API calls.
