@@ -40,31 +40,3 @@
         "maximizeAreaName": "app-maximize-area"
     }
 }
-
-🔑 Desktop Store Attributes ($STORE)
-The Agent Desktop provides a global $STORE object that allows gadgets to access real-time context.
-Below are the attributes available for mapping in your layout JSON:
-
-Authentication ($STORE.auth)
-$STORE.auth.accessToken: The bearer token used for authenticated REST API calls.
-$STORE.auth.refreshToken: The token used to refresh the session access token.
-
-Agent Context ($STORE.agent)
-$STORE.agent.orgId: The unique identifier for your Webex Contact Center organization.
-$STORE.agent.agentId: The unique ID of the currently logged-in agent.
-$STORE.agent.agentName: The display name of the agent.
-$STORE.agent.sub: The unique subject identifier (UUID) for the user.
-$STORE.agent.state: The current availability status (e.g., Available, Idle).
-
-App & Environment ($STORE.app)
-$STORE.app.datacenter: The AWS region/datacenter the desktop is connected to (e.g., produs1).
-$STORE.app.darkMode: Boolean indicating if the user has enabled Dark Mode.
-$STORE.app.locale: The agent's language and region setting (e.g., en-US).
-$STORE.app.viewMode: Indicates if the desktop is in standard view or a connector/minimized view.
-
-Interaction Data ($STORE.agentContact)
-$STORE.agentContact.taskMap: Object containing all active tasks indexed by Task ID.
-$STORE.agentContact.selectedTaskId: The ID of the call or chat currently in focus.
-
-System Notifications ($STORE.generalNotifications)
-$STORE.generalNotifications.list: A list of active notifications currently displayed in the desktop's notification center.
