@@ -1,4 +1,3 @@
-```markdown
 # Supervisor Controls Gadget for Webex Contact Center
 
 **Supervisor Controls** is a custom desktop gadget that allows Webex Contact Center supervisors to view and update **Global Variables** and **Business Hour Calendars** directly from the Supervisor Desktop.
