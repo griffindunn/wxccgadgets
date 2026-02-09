@@ -1,11 +1,10 @@
 /* FILENAME: SupervisorControls.js
-   DESCRIPTION: A Webex Contact Center gadget for Supervisors to manage 
-                Global Variables and Business Hours (Shifts) directly from the desktop.
-   VERSION: v4.6-Restored (Features 1, 2, & 3 applied to clean base)
+   DESCRIPTION: A Webex Contact Center gadget for Supervisors.
+   VERSION: v4.7-Aligned (Includes Split Render, Numbers, Conflict Check, & Fixed Alignment)
 */
 
 (function() {
-    const VERSION = "v4.6-Restored";
+    const VERSION = "v4.7-Aligned";
     
     // --- STYLING SECTION (CSS) ---
     const CSS_STYLES = `
@@ -42,26 +41,32 @@
             border-bottom: 1px solid var(--border-color); padding-bottom: 8px; letter-spacing: 1px;
         }
 
-        /* Container for all the cards */
         #content { display: block; padding-bottom: 40px; }
-        
-        /* Wrappers for specific sections to allow flex layout within them */
         .section-wrapper { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
 
+        /* --- ALIGNMENT FIX (Feature #4) --- */
         .var-row {
             background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;
             padding: 16px; display: flex; align-items: flex-start; transition: box-shadow 0.2s;
-            flex: 0 0 auto; min-width: 300px;
+            
+            /* FIX: Fixed basis (450px) and NO GROW (0). This prevents the last item from stretching. */
+            flex: 0 1 450px; 
+            min-width: 300px; /* Fallback for very small screens */
         }
         .var-row:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
         
-        .var-info { flex: 0 0 150px; margin-right: 20px; margin-top: 8px; }
+        .var-info { 
+            /* FIX: Fixed width for labels ensures input boxes always start at the same pixel */
+            flex: 0 0 180px; 
+            margin-right: 20px; margin-top: 8px; 
+            overflow-wrap: break-word; /* Safety for very long names */
+        }
+        
         .var-name { font-weight: 600; color: var(--text-main); font-size: 0.95rem; margin-bottom: 4px; display: block; }
         .var-desc { font-size: 0.8rem; color: var(--text-desc); line-height: 1.4; }
         
         .var-input-container { display: flex; gap: 8px; align-items: flex-start; flex: 1; }
         
-        /* Updated Input Styles to support number inputs */
         .var-input, textarea.var-input, select, input[type="number"] {
             width: 100%; padding: 8px; border: 1px solid var(--border-color);
             background-color: var(--bg-input); color: var(--text-input);
@@ -69,6 +74,7 @@
         }
         textarea.var-input { resize: both; }
 
+        /* --- BUSINESS HOURS STYLES --- */
         .bh-card {
             display: flex; flex-direction: column; background: var(--bg-card);
             border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;
@@ -141,17 +147,13 @@
         .btn-primary { background: var(--color-primary); color: white; }
         .btn-primary:hover { background: var(--color-primary-hover); }
         .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
-        
         .btn-success { background: var(--color-success); color: white; }
         .btn-success:hover { opacity: 0.9; }
-        
         .btn-black { background: #222; color: white; }
         .btn-black:hover { background: #000; }
         @media (prefers-color-scheme: dark) { .btn-black { background: #444; } .btn-black:hover { background: #555; } }
-        
         .btn-secondary { background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-main); }
         .btn-secondary:hover { background: var(--border-light); }
-        
         .btn-danger { background: var(--color-danger); color: white; }
         .btn-danger:hover { opacity: 0.9; }
 
@@ -230,14 +232,12 @@
 
         async loadAllData() {
             const contentDiv = this.shadowRoot.getElementById('content');
-            // Initial load message
             if(!this.data.variables.length && !this.data.businessHours.length) {
                 contentDiv.innerHTML = '<div class="loading"><span>Loading Data...</span></div>';
             }
 
             try {
                 await Promise.all([this.loadVariables(), this.loadBusinessHours()]);
-                // Restore structure after loading
                 contentDiv.innerHTML = `
                     <div id="variables-container"></div>
                     <div id="bh-container" style="margin-top: 30px;"></div>
@@ -277,7 +277,6 @@
             return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
 
-        // --- FEATURE #1: SPLIT RENDERING ---
         render() {
             this.renderVariables();
             this.renderBusinessHours();
@@ -295,7 +294,6 @@
             });
 
             let currentType = '';
-            // Create a wrapper for flex layout logic inside variables container
             let currentWrapper = document.createElement('div');
             currentWrapper.className = 'section-wrapper';
 
@@ -312,7 +310,6 @@
             });
             container.appendChild(currentWrapper);
 
-            // Attach listeners specific to variables
             container.querySelectorAll('.save-var-btn').forEach(b => 
                 b.addEventListener('click', e => this.handleSaveVariable(e.target.dataset.id, e.target))
             );
@@ -335,12 +332,9 @@
                 });
                 container.appendChild(wrapper);
             }
-
-            // Attach listeners specific to business hours
             this.attachBusinessHoursListeners(container);
         }
 
-        // --- FEATURE #2: NUMBER INPUT SUPPORT ---
         buildVariableCard(v) {
             const vType = (v.variableType || '').toUpperCase();
             const safeName = this.escapeHtml(v.name);
@@ -356,7 +350,6 @@
                      <option value="false" ${String(v.defaultValue) === 'false' ? 'selected' : ''}>FALSE</option>
                    </select>`;
             } else if (vType === 'NUMBER' || vType === 'INTEGER') {
-                // FEATURE #2: Render Number Input
                 inputHtml = `<input type="number" id="input-${v.id}" class="var-input" value="${safeVal}">`;
             } else {
                 inputHtml = `<textarea id="input-${v.id}" class="var-input" rows="1">${safeVal}</textarea>`;
@@ -511,37 +504,32 @@
                     editBox.querySelector('.confirm-del-btn').addEventListener('click', () => {
                         this.editState[bhId].splice(idx, 1);
                         this.hasChanges[bhId] = true;
-                        this.renderBusinessHours(); // Feature #1: Only re-render BH
+                        this.renderBusinessHours();
                     });
                 });
             }
 
-            // --- FEATURE #3: VALIDATION AND SAVE ---
             editBox.querySelector('.confirm-edit-btn').addEventListener('click', () => {
                 const name = editBox.querySelector('.edit-name').value.trim();
                 const start = editBox.querySelector('.edit-start').value;
                 const end = editBox.querySelector('.edit-end').value;
                 const days = Array.from(editBox.querySelectorAll('.day-pill.selected')).map(el => el.dataset.day);
 
-                // 1. Basic Validation
                 const validation = this.validateShift(name, start, end, days);
                 if (validation) { this.showNotification(validation, 'error'); return; }
 
                 const tempShifts = [...this.editState[bhId]];
                 const otherShifts = idx === -1 ? tempShifts : tempShifts.filter((_, i) => i !== idx);
 
-                // FEATURE #3: Duplicate Name Check
                 const isDuplicate = otherShifts.some(s => (s.name || '').trim().toLowerCase() === name.toLowerCase());
                 if (isDuplicate) { 
                     this.showNotification(`Error: Shift name "${name}" already exists.`, 'error'); 
                     return; 
                 }
 
-                // 2. Conflict Check
                 const conflict = this.checkConflicts({ name, startTime: start, endTime: end, days }, otherShifts);
                 if (conflict) { this.showNotification(conflict, 'error'); return; }
 
-                // 3. Save
                 if(idx === -1) {
                     this.editState[bhId].push({ name, startTime: start, endTime: end, days });
                 } else {
@@ -549,7 +537,7 @@
                 }
                 
                 this.hasChanges[bhId] = true;
-                this.renderBusinessHours(); // Feature #1: Only re-render BH
+                this.renderBusinessHours();
             });
         }
 
@@ -655,7 +643,7 @@
                 originalBh.workingHours = JSON.parse(JSON.stringify(finalShifts));
                 this.hasChanges[bhId] = false;
                 this.showNotification(`Saved "${originalBh.name}"`, 'success');
-                this.renderBusinessHours(); // Feature #1: Only re-render BH
+                this.renderBusinessHours();
 
             } catch (err) {
                 this.showNotification(`Save Failed: ${err.message}`, 'error');
@@ -674,7 +662,6 @@
             const originalVar = this.data.variables.find(v => v.id === varId);
             const vType = (originalVar.variableType || '').toUpperCase();
             
-            // FEATURE #2: Parse Number/Integer correctly
             if (vType === 'BOOLEAN') {
                 newValue = (newValue === 'true');
             } else if (vType === 'NUMBER' || vType === 'INTEGER') {
