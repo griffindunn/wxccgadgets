@@ -1,11 +1,11 @@
 /* FILENAME: SupervisorControls.js
    DESCRIPTION: A Webex Contact Center gadget for Supervisors to manage 
                 Global Variables and Business Hours (Shifts).
-   VERSION: v4.3-LayoutFixes (Alignment, UI Cleanup, Hardened Edit Logic)
+   VERSION: v4.4-Polished (CSS Grid Layout, UI Tightening, Logic Hardening)
 */
 
 (function() {
-    const VERSION = "v4.3-LayoutFixes";
+    const VERSION = "v4.4-Polished";
     
     // --- STYLING SECTION (CSS) ---
     const CSS_STYLES = `
@@ -19,7 +19,7 @@
             --color-primary: #00bceb; --color-primary-hover: #00a0c6;
             --color-success: #2fb16c; --color-danger: #dc3545;
             
-            /* Dynamic variable for alignment */
+            /* UI Dimensions */
             --var-label-width: 150px; 
 
             display: block; font-family: "CiscoSans", "Helvetica Neue", Helvetica, Arial, sans-serif;
@@ -37,27 +37,31 @@
             }
         }
 
-        /* Title removed as requested */
-        
         h3.category-header {
             width: 100%; margin: 30px 0 15px; font-size: 0.8rem; font-weight: 700;
             text-transform: uppercase; color: var(--text-sub);
             border-bottom: 1px solid var(--border-color); padding-bottom: 8px; letter-spacing: 1px;
+            grid-column: 1 / -1; /* Ensure headers span full width in Grid */
         }
 
-        /* Flex container for cards */
-        .cards-wrapper { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; padding-bottom: 20px; }
+        /* GRID LAYOUT FIX: Replaces Flexbox to prevent "last item stretching" */
+        .cards-wrapper { 
+            display: grid; 
+            /* Creates columns that are at least 340px wide, filling the row automatically */
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); 
+            gap: 20px; 
+            padding-bottom: 20px; 
+        }
 
         /* Variable Card */
         .var-row {
             background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;
-            padding: 16px; display: flex; align-items: flex-start; transition: box-shadow 0.2s;
-            flex: 1 1 auto; /* Allow growth */
-            min-width: 400px; /* Ensure enough space */
+            padding: 16px; display: flex; align-items: flex-start; 
+            transition: box-shadow 0.2s;
+            /* No flex-grow needed here because CSS Grid handles the sizing */
         }
         .var-row:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
         
-        /* ALIGNMENT FIX: Use the calculated width */
         .var-info { 
             flex: 0 0 var(--var-label-width); 
             margin-right: 20px; margin-top: 8px; 
@@ -70,7 +74,6 @@
         /* Inputs */
         .var-input-container { display: flex; gap: 8px; align-items: flex-start; flex: 1; }
         
-        /* General Inputs */
         .var-input, textarea.var-input, input[type="number"] {
             width: 100%; padding: 8px; border: 1px solid var(--border-color);
             background-color: var(--bg-input); color: var(--text-input);
@@ -78,11 +81,10 @@
         }
         textarea.var-input { resize: both; }
 
-        /* DROPDOWN UI FIX: Shrink to fit content so arrow is closer */
+        /* DROPDOWN UI FIX: fit-content pulls the arrow closer to text */
         select.var-input {
-            width: auto; 
-            min-width: 90px;
-            padding: 8px 30px 8px 10px; /* Extra right padding for arrow */
+            width: fit-content; 
+            padding: 8px 32px 8px 10px; /* Right padding reserved for arrow */
             border: 1px solid var(--border-color);
             background-color: var(--bg-input); color: var(--text-input);
             border-radius: 4px; font: inherit; min-height: 38px;
@@ -94,7 +96,12 @@
             display: flex; flex-direction: column; background: var(--bg-card);
             border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;
             flex: 0 0 auto; min-width: 450px; margin-bottom: 20px;
+            /* In Grid, if this is inside cards-wrapper, it might be constrained. 
+               Usually BH cards are wider, so we might want them to span 2 columns if space allows. */
+             grid-column: span 1; 
         }
+        @media (min-width: 900px) { .bh-card { grid-column: span 2; } } /* Wider on big screens */
+
         .bh-header {
             background: var(--bg-header); padding: 15px 20px; border-bottom: 1px solid var(--border-light);
             display: flex; justify-content: space-between; align-items: center;
@@ -293,10 +300,7 @@
                 return a.name.localeCompare(b.name);
             });
 
-            // ALIGNMENT LOGIC: Calculate max width of all variable names
-            // We approximate this by length or create a temp element. 
-            // For robustness in ShadowDOM, we use a simple character heuristic + buffer, 
-            // or we could use real measurement. Here we use real measurement.
+            // Calculate uniform label width
             const maxLabelWidth = this.calculateMaxLabelWidth(vars);
             this.style.setProperty('--var-label-width', `${maxLabelWidth}px`);
 
@@ -322,10 +326,8 @@
             );
         }
 
-        // ALIGNMENT HELPER: Measure text width
         calculateMaxLabelWidth(vars) {
             if(!vars.length) return 150;
-            // Create a temporary hidden span to measure text
             const span = document.createElement('span');
             span.style.visibility = 'hidden';
             span.style.position = 'absolute';
@@ -333,15 +335,14 @@
             span.style.fontWeight = '600';
             span.style.fontSize = '0.95rem';
             document.body.appendChild(span);
-
-            let maxWidth = 150; // Minimum width
+            let maxWidth = 150; 
             vars.forEach(v => {
                 span.innerText = v.name;
                 const w = span.offsetWidth;
                 if(w > maxWidth) maxWidth = w;
             });
             document.body.removeChild(span);
-            return maxWidth + 10; // Add small buffer
+            return maxWidth + 10; 
         }
 
         renderBusinessHours() {
@@ -352,7 +353,7 @@
             if (this.data.businessHours.length > 0) {
                 container.insertAdjacentHTML('beforeend', `<h3 class="category-header">Business Hours</h3>`);
                 const wrapper = document.createElement('div');
-                wrapper.className = 'cards-wrapper';
+                wrapper.className = 'cards-wrapper'; // Uses Grid now
                 
                 this.data.businessHours.forEach(bh => {
                     const shifts = this.editState[bh.id] || [];
@@ -467,10 +468,16 @@
         }
 
         openEditShiftUI(bhId, idxString, rowEl) {
-            // FIX: Explicitly parse index to integer to prevent comparison errors
+            // LOGIC HARDENING: Explicit base-10 parsing to prevent ID mismatch
             const idx = parseInt(idxString, 10);
-            const shift = this.editState[bhId][idx];
             
+            // Should not happen, but safe fallback to prevent crashes
+            if (isNaN(idx)) {
+                 console.error("Invalid Shift Index");
+                 return;
+            }
+
+            const shift = this.editState[bhId][idx];
             rowEl.insertAdjacentHTML('afterend', this.getShiftEditHTML(shift, false));
             const editBox = rowEl.nextElementSibling;
             rowEl.style.display = 'none'; 
@@ -543,13 +550,17 @@
 
                 // 2. Prep data for checks
                 const tempShifts = [...this.editState[bhId]];
-                // FIX: idx is definitely an integer now, so this check works correctly
-                const otherShifts = idx === -1 ? tempShifts : tempShifts.filter((_, i) => i !== idx);
+                
+                // LOGIC HARDENING: Ensure we don't compare a shift against itself during an edit.
+                // We use strict integer comparison.
+                const otherShifts = idx === -1 
+                    ? tempShifts 
+                    : tempShifts.filter((_, i) => i !== idx);
 
-                // 3. Name Duplication Check (Hardened against null names)
+                // 3. Name Duplication Check
                 const isDuplicate = otherShifts.some(s => (s.name || '').trim().toLowerCase() === name.toLowerCase());
                 if (isDuplicate) { 
-                    this.showNotification(`Error: Shift name "${name}" already exists.`, 'error'); 
+                    this.showNotification(`Error: Shift name "${name}" already exists in this calendar.`, 'error'); 
                     return; 
                 }
                 
