@@ -1,10 +1,10 @@
 /* FILENAME: SupervisorControls.js
    DESCRIPTION: A Webex Contact Center gadget for Supervisors.
-   VERSION: v4.7-Aligned (Includes Split Render, Numbers, Conflict Check, & Fixed Alignment)
+   VERSION: v4.8-Resizing (Fixed Alignment + Horizontal Expansion Support)
 */
 
 (function() {
-    const VERSION = "v4.7-Aligned";
+    const VERSION = "v4.8-Resizing";
     
     // --- STYLING SECTION (CSS) ---
     const CSS_STYLES = `
@@ -44,22 +44,24 @@
         #content { display: block; padding-bottom: 40px; }
         .section-wrapper { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
 
-        /* --- ALIGNMENT FIX (Feature #4) --- */
+        /* --- VARIABLE CARD STYLING --- */
         .var-row {
             background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;
             padding: 16px; display: flex; align-items: flex-start; transition: box-shadow 0.2s;
             
-            /* FIX: Fixed basis (450px) and NO GROW (0). This prevents the last item from stretching. */
-            flex: 0 1 450px; 
-            min-width: 300px; /* Fallback for very small screens */
+            /* FIX v4.8: Use min-width instead of fixed basis. 
+               This keeps alignment at 450px but allows expansion (auto) if user drags. */
+            flex: 0 0 auto;
+            min-width: 450px;
+            max-width: 100%; /* Prevent overflowing the viewport */
         }
         .var-row:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
         
         .var-info { 
-            /* FIX: Fixed width for labels ensures input boxes always start at the same pixel */
+            /* Fixed label width ensures vertical alignment of inputs */
             flex: 0 0 180px; 
             margin-right: 20px; margin-top: 8px; 
-            overflow-wrap: break-word; /* Safety for very long names */
+            overflow-wrap: break-word; 
         }
         
         .var-name { font-weight: 600; color: var(--text-main); font-size: 0.95rem; margin-bottom: 4px; display: block; }
@@ -72,7 +74,7 @@
             background-color: var(--bg-input); color: var(--text-input);
             border-radius: 4px; font: inherit; min-height: 38px; box-sizing: border-box;
         }
-        textarea.var-input { resize: both; }
+        textarea.var-input { resize: both; min-width: 100px; }
 
         /* --- BUSINESS HOURS STYLES --- */
         .bh-card {
