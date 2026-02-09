@@ -1,13 +1,12 @@
 /* FILENAME: SupervisorControls.js
-   DESCRIPTION: A Webex Contact Center gadget for Supervisors to manage 
-                Global Variables and Business Hours (Shifts).
-   VERSION: v4.4-Polished (CSS Grid Layout, UI Tightening, Logic Hardening)
+   DESCRIPTION: A Webex Contact Center gadget for Supervisors.
+   VERSION: v4.5-FinalFix (Strict Alignment, Hardened Logic, Fixed-Width Selects)
 */
 
 (function() {
-    const VERSION = "v4.4-Polished";
+    const VERSION = "v4.5-FinalFix";
     
-    // --- STYLING SECTION (CSS) ---
+    // --- CSS STYLES ---
     const CSS_STYLES = `
         :host {
             color-scheme: light dark;
@@ -18,9 +17,6 @@
             --border-color: #dcdcdc; --border-light: #eee; --border-accent: #00bceb;
             --color-primary: #00bceb; --color-primary-hover: #00a0c6;
             --color-success: #2fb16c; --color-danger: #dc3545;
-            
-            /* UI Dimensions */
-            --var-label-width: 150px; 
 
             display: block; font-family: "CiscoSans", "Helvetica Neue", Helvetica, Arial, sans-serif;
             background-color: var(--bg-app); color: var(--text-main);
@@ -41,67 +37,51 @@
             width: 100%; margin: 30px 0 15px; font-size: 0.8rem; font-weight: 700;
             text-transform: uppercase; color: var(--text-sub);
             border-bottom: 1px solid var(--border-color); padding-bottom: 8px; letter-spacing: 1px;
-            grid-column: 1 / -1; /* Ensure headers span full width in Grid */
         }
 
-        /* GRID LAYOUT FIX: Replaces Flexbox to prevent "last item stretching" */
-        .cards-wrapper { 
-            display: grid; 
-            /* Creates columns that are at least 340px wide, filling the row automatically */
-            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); 
-            gap: 20px; 
-            padding-bottom: 20px; 
+        /* --- STRICT TABLE LAYOUT FOR VARIABLES --- */
+        /* This enforces perfect alignment columns */
+        .vars-grid {
+            display: grid;
+            /* 3 Columns: Label (Fixed), Input (Flexible), Button (Fixed) */
+            grid-template-columns: 200px 1fr 80px; 
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        /* The row container */
+        .var-row-strict {
+            display: contents; /* Allows children to participate in the main grid */
+        }
+        
+        .var-label-cell {
+            font-weight: 600; font-size: 0.9rem; color: var(--text-main);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            padding: 8px 0;
         }
 
-        /* Variable Card */
-        .var-row {
-            background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;
-            padding: 16px; display: flex; align-items: flex-start; 
-            transition: box-shadow 0.2s;
-            /* No flex-grow needed here because CSS Grid handles the sizing */
-        }
-        .var-row:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-        
-        .var-info { 
-            flex: 0 0 var(--var-label-width); 
-            margin-right: 20px; margin-top: 8px; 
-            overflow-wrap: break-word;
-        }
-        
-        .var-name { font-weight: 600; color: var(--text-main); font-size: 0.95rem; display: block; }
-        .var-desc { font-size: 0.8rem; color: var(--text-desc); line-height: 1.4; margin-top: 4px; }
-        
-        /* Inputs */
-        .var-input-container { display: flex; gap: 8px; align-items: flex-start; flex: 1; }
-        
+        .var-input-cell { display: flex; align-items: center; }
+
         .var-input, textarea.var-input, input[type="number"] {
             width: 100%; padding: 8px; border: 1px solid var(--border-color);
             background-color: var(--bg-input); color: var(--text-input);
-            border-radius: 4px; font: inherit; min-height: 38px; box-sizing: border-box;
+            border-radius: 4px; font: inherit; min-height: 36px; box-sizing: border-box;
         }
-        textarea.var-input { resize: both; }
 
-        /* DROPDOWN UI FIX: fit-content pulls the arrow closer to text */
+        /* DROPDOWN FIX: Fixed width forces arrow close to text */
         select.var-input {
-            width: fit-content; 
-            padding: 8px 32px 8px 10px; /* Right padding reserved for arrow */
-            border: 1px solid var(--border-color);
-            background-color: var(--bg-input); color: var(--text-input);
-            border-radius: 4px; font: inherit; min-height: 38px;
+            width: 85px; /* Rigid width */
+            padding: 4px;
             cursor: pointer;
         }
 
-        /* Business Hours Card */
+        /* --- BUSINESS HOURS --- */
         .bh-card {
             display: flex; flex-direction: column; background: var(--bg-card);
             border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;
-            flex: 0 0 auto; min-width: 450px; margin-bottom: 20px;
-            /* In Grid, if this is inside cards-wrapper, it might be constrained. 
-               Usually BH cards are wider, so we might want them to span 2 columns if space allows. */
-             grid-column: span 1; 
+            margin-bottom: 20px;
         }
-        @media (min-width: 900px) { .bh-card { grid-column: span 2; } } /* Wider on big screens */
-
         .bh-header {
             background: var(--bg-header); padding: 15px 20px; border-bottom: 1px solid var(--border-light);
             display: flex; justify-content: space-between; align-items: center;
@@ -153,18 +133,18 @@
         .bh-save-bar.visible { display: block; animation: slideUp 0.3s ease-out; }
         @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        .btn { padding: 0 16px; height: 36px; border: none; border-radius: 18px; font-weight: 600; font-size: 13px; cursor: pointer; transition: 0.2s; }
-        .btn-primary { background: var(--color-primary); color: white; }
+        .btn { padding: 0 16px; height: 36px; border: none; border-radius: 4px; font-weight: 600; font-size: 13px; cursor: pointer; transition: 0.2s; }
+        .btn-primary { background: var(--color-primary); color: white; border-radius: 18px; }
         .btn-primary:hover { background: var(--color-primary-hover); }
         .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
-        .btn-success { background: var(--color-success); color: white; }
+        .btn-success { background: var(--color-success); color: white; border-radius: 18px; }
         .btn-success:hover { opacity: 0.9; }
-        .btn-black { background: #222; color: white; }
+        .btn-black { background: #222; color: white; border-radius: 18px; }
         .btn-black:hover { background: #000; }
         @media (prefers-color-scheme: dark) { .btn-black { background: #444; } }
-        .btn-secondary { background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-main); }
+        .btn-secondary { background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 18px; }
         .btn-secondary:hover { background: var(--border-light); }
-        .btn-danger { background: var(--color-danger); color: white; }
+        .btn-danger { background: var(--color-danger); color: white; border-radius: 18px; }
 
         .footer-version { position: fixed; bottom: 8px; left: 15px; font-size: 11px; color: var(--text-desc); pointer-events: none; }
         #toast {
@@ -242,7 +222,6 @@
             if(!this.data.variables.length && !this.data.businessHours.length) {
                 contentDiv.innerHTML = '<div class="loading"><span>Loading Data...</span></div>';
             }
-            
             try {
                 await Promise.all([this.loadVariables(), this.loadBusinessHours()]);
                 contentDiv.innerHTML = `
@@ -289,6 +268,7 @@
             this.renderBusinessHours();
         }
 
+        // --- NEW RENDERER: Uses Grid Table for Strict Alignment ---
         renderVariables() {
             const container = this.shadowRoot.getElementById('variables-container');
             if(!container) return; 
@@ -300,78 +280,38 @@
                 return a.name.localeCompare(b.name);
             });
 
-            // Calculate uniform label width
-            const maxLabelWidth = this.calculateMaxLabelWidth(vars);
-            this.style.setProperty('--var-label-width', `${maxLabelWidth}px`);
-
             let currentType = '';
-            let currentWrapper = document.createElement('div');
-            currentWrapper.className = 'cards-wrapper';
+            let currentGrid = null;
 
             vars.forEach(v => {
                 const type = (v.variableType || 'UNKNOWN').toUpperCase();
                 if (type !== currentType) {
-                    if (currentType !== '') container.appendChild(currentWrapper);
                     currentType = type;
                     container.insertAdjacentHTML('beforeend', `<h3 class="category-header">${this.escapeHtml(currentType)} Variables</h3>`);
-                    currentWrapper = document.createElement('div');
-                    currentWrapper.className = 'cards-wrapper';
+                    
+                    // Create a new grid container for this category
+                    currentGrid = document.createElement('div');
+                    currentGrid.className = 'vars-grid';
+                    container.appendChild(currentGrid);
                 }
-                currentWrapper.insertAdjacentHTML('beforeend', this.buildVariableCard(v));
+                
+                // Inject Row directly into the Grid
+                currentGrid.insertAdjacentHTML('beforeend', this.buildVariableRowStrict(v));
             });
-            container.appendChild(currentWrapper);
 
+            // Attach Listeners
             container.querySelectorAll('.save-var-btn').forEach(b => 
                 b.addEventListener('click', e => this.handleSaveVariable(e.target.dataset.id, e.target))
             );
         }
 
-        calculateMaxLabelWidth(vars) {
-            if(!vars.length) return 150;
-            const span = document.createElement('span');
-            span.style.visibility = 'hidden';
-            span.style.position = 'absolute';
-            span.style.fontFamily = '"CiscoSans", "Helvetica Neue", Helvetica, Arial, sans-serif';
-            span.style.fontWeight = '600';
-            span.style.fontSize = '0.95rem';
-            document.body.appendChild(span);
-            let maxWidth = 150; 
-            vars.forEach(v => {
-                span.innerText = v.name;
-                const w = span.offsetWidth;
-                if(w > maxWidth) maxWidth = w;
-            });
-            document.body.removeChild(span);
-            return maxWidth + 10; 
-        }
-
-        renderBusinessHours() {
-            const container = this.shadowRoot.getElementById('bh-container');
-            if(!container) return;
-            container.innerHTML = '';
-
-            if (this.data.businessHours.length > 0) {
-                container.insertAdjacentHTML('beforeend', `<h3 class="category-header">Business Hours</h3>`);
-                const wrapper = document.createElement('div');
-                wrapper.className = 'cards-wrapper'; // Uses Grid now
-                
-                this.data.businessHours.forEach(bh => {
-                    const shifts = this.editState[bh.id] || [];
-                    const isDirty = this.hasChanges[bh.id];
-                    wrapper.appendChild(this.buildBusinessHoursCard(bh, shifts, isDirty));
-                });
-                container.appendChild(wrapper);
-            }
-            this.attachBusinessHoursListeners(container);
-        }
-
-        buildVariableCard(v) {
+        // Builder for Strict Row
+        buildVariableRowStrict(v) {
             const vType = (v.variableType || '').toUpperCase();
             const safeName = this.escapeHtml(v.name);
-            const safeDesc = this.escapeHtml(v.description);
             const safeVal = this.escapeHtml(v.defaultValue || '');
+            
             let inputHtml = '';
-
             if (vType === 'BOOLEAN') {
                 inputHtml = `
                    <select id="input-${v.id}" class="var-input">
@@ -385,16 +325,29 @@
             }
 
             return `
-                <div class="var-row">
-                    <div class="var-info">
-                        <span class="var-name">${safeName}</span>
-                        ${v.description ? `<div class="var-desc">${safeDesc}</div>` : ''}
-                    </div>
-                    <div class="var-input-container">
-                        ${inputHtml}
+                <div class="var-row-strict">
+                    <div class="var-label-cell" title="${safeName}">${safeName}</div>
+                    <div class="var-input-cell">${inputHtml}</div>
+                    <div class="var-btn-cell">
                         <button class="btn btn-primary save-var-btn" data-id="${v.id}">Save</button>
                     </div>
                 </div>`;
+        }
+
+        renderBusinessHours() {
+            const container = this.shadowRoot.getElementById('bh-container');
+            if(!container) return;
+            container.innerHTML = '';
+
+            if (this.data.businessHours.length > 0) {
+                container.insertAdjacentHTML('beforeend', `<h3 class="category-header">Business Hours</h3>`);
+                this.data.businessHours.forEach(bh => {
+                    const shifts = this.editState[bh.id] || [];
+                    const isDirty = this.hasChanges[bh.id];
+                    container.appendChild(this.buildBusinessHoursCard(bh, shifts, isDirty));
+                });
+            }
+            this.attachBusinessHoursListeners(container);
         }
 
         buildBusinessHoursCard(bh, shifts, isDirty) {
@@ -422,21 +375,16 @@
                         </div>
                     `).join('');
                 }
-
                 daysHtml += `
                     <div class="bh-day-group">
                         <div class="bh-day-name">${dayName}</div>
                         <div class="bh-day-shifts">${rowsHtml}</div>
-                    </div>
-                `;
+                    </div>`;
             });
 
             card.innerHTML = `
                 <div class="bh-header">
-                    <div>
-                        <div class="bh-title">${this.escapeHtml(bh.name)}</div>
-                        ${bh.description ? `<div class="var-desc">${this.escapeHtml(bh.description)}</div>` : ''}
-                    </div>
+                    <div class="bh-title">${this.escapeHtml(bh.name)}</div>
                     <button class="btn btn-black add-shift-btn" data-bh="${bh.id}">Add Shift</button>
                 </div>
                 <div id="new-shift-container-${bh.id}" class="bh-new-shift-area"></div>
@@ -464,19 +412,11 @@
             const defaultShift = { name: "New Shift", startTime: "09:00", endTime: "17:00", days: [] };
             container.innerHTML = this.getShiftEditHTML(defaultShift, true);
             container.classList.add('active');
-            this.attachShiftEditHandlers(container, bhId, -1);
+            this.setupEditForm(container, bhId, -1);
         }
 
         openEditShiftUI(bhId, idxString, rowEl) {
-            // LOGIC HARDENING: Explicit base-10 parsing to prevent ID mismatch
             const idx = parseInt(idxString, 10);
-            
-            // Should not happen, but safe fallback to prevent crashes
-            if (isNaN(idx)) {
-                 console.error("Invalid Shift Index");
-                 return;
-            }
-
             const shift = this.editState[bhId][idx];
             rowEl.insertAdjacentHTML('afterend', this.getShiftEditHTML(shift, false));
             const editBox = rowEl.nextElementSibling;
@@ -487,97 +427,7 @@
                 rowEl.style.display = 'grid';
             }, { once: true });
             
-            this.attachShiftEditHandlers(editBox, bhId, idx, rowEl);
-        }
-
-        attachShiftEditHandlers(container, bhId, idx, rowEl = null) {
-            const editBox = container.querySelector('.shift-edit-box');
-
-            editBox.querySelectorAll('.day-pill').forEach(t => {
-                t.addEventListener('click', (e) => {
-                    e.currentTarget.classList.toggle('selected');
-                    if(e.currentTarget.classList.contains('selected')) {
-                        e.currentTarget.innerHTML = `&#10003; ${e.currentTarget.dataset.day}`;
-                    } else {
-                        e.currentTarget.innerText = e.currentTarget.dataset.day;
-                    }
-                });
-            });
-
-            if(idx === -1) {
-                editBox.querySelector('.cancel-edit-btn').addEventListener('click', () => {
-                    container.innerHTML = '';
-                    container.classList.remove('active');
-                });
-            }
-
-            const deleteBtn = editBox.querySelector('.delete-shift-btn');
-            if (deleteBtn) {
-                deleteBtn.addEventListener('click', () => {
-                    const normalView = editBox.querySelector('.edit-normal-view');
-                    normalView.style.display = 'none';
-                    const confirmHtml = `
-                        <div class="delete-confirm-view">
-                            <div style="margin-bottom: 15px; font-weight:600; color: var(--text-main);">Are you sure?</div>
-                            <div style="display:flex; justify-content:center; gap:10px;">
-                                <button class="btn btn-secondary cancel-del-btn">No</button>
-                                <button class="btn btn-danger confirm-del-btn">Yes, Delete</button>
-                            </div>
-                        </div>`;
-                    editBox.insertAdjacentHTML('beforeend', confirmHtml);
-                    editBox.querySelector('.cancel-del-btn').addEventListener('click', () => {
-                        editBox.querySelector('.delete-confirm-view').remove();
-                        normalView.style.display = 'block';
-                    });
-                    editBox.querySelector('.confirm-del-btn').addEventListener('click', () => {
-                        this.editState[bhId].splice(idx, 1);
-                        this.hasChanges[bhId] = true;
-                        this.renderBusinessHours();
-                    });
-                });
-            }
-
-            // --- CONFIRM EDIT / ADD SHIFT ---
-            editBox.querySelector('.confirm-edit-btn').addEventListener('click', () => {
-                const name = editBox.querySelector('.edit-name').value.trim();
-                const start = editBox.querySelector('.edit-start').value;
-                const end = editBox.querySelector('.edit-end').value;
-                const days = Array.from(editBox.querySelectorAll('.day-pill.selected')).map(el => el.dataset.day);
-
-                // 1. Basic Validation
-                const validation = this.validateShift(name, start, end, days);
-                if (validation) { this.showNotification(validation, 'error'); return; }
-
-                // 2. Prep data for checks
-                const tempShifts = [...this.editState[bhId]];
-                
-                // LOGIC HARDENING: Ensure we don't compare a shift against itself during an edit.
-                // We use strict integer comparison.
-                const otherShifts = idx === -1 
-                    ? tempShifts 
-                    : tempShifts.filter((_, i) => i !== idx);
-
-                // 3. Name Duplication Check
-                const isDuplicate = otherShifts.some(s => (s.name || '').trim().toLowerCase() === name.toLowerCase());
-                if (isDuplicate) { 
-                    this.showNotification(`Error: Shift name "${name}" already exists in this calendar.`, 'error'); 
-                    return; 
-                }
-                
-                // 4. Time Conflict Check
-                const conflict = this.checkConflicts({ name, startTime: start, endTime: end, days }, otherShifts);
-                if (conflict) { this.showNotification(conflict, 'error'); return; }
-
-                // 5. Commit
-                if(idx === -1) {
-                    this.editState[bhId].push({ name, startTime: start, endTime: end, days });
-                } else {
-                    this.editState[bhId][idx] = { name, startTime: start, endTime: end, days };
-                }
-                
-                this.hasChanges[bhId] = true;
-                this.renderBusinessHours();
-            });
+            this.setupEditForm(editBox, bhId, idx, rowEl);
         }
 
         getShiftEditHTML(shift, isNew) {
@@ -623,12 +473,82 @@
                 </div>`;
         }
 
-        validateShift(name, start, end, days) {
-            if (!name) return "Name is required.";
-            if (days.length === 0) return "Select at least one day.";
-            if (!start || !end) return "Start and End times required.";
-            if (start >= end) return "Start time must be before End time.";
-            return null;
+        // --- NEW LOGIC: Centralized Edit Handler with Safety Checks ---
+        setupEditForm(container, bhId, idx, rowEl = null) {
+            const editBox = container.querySelector('.shift-edit-box');
+
+            // Day Selection
+            editBox.querySelectorAll('.day-pill').forEach(t => {
+                t.addEventListener('click', (e) => {
+                    e.currentTarget.classList.toggle('selected');
+                    if(e.currentTarget.classList.contains('selected')) {
+                        e.currentTarget.innerHTML = `&#10003; ${e.currentTarget.dataset.day}`;
+                    } else {
+                        e.currentTarget.innerText = e.currentTarget.dataset.day;
+                    }
+                });
+            });
+
+            // Cancel (If New)
+            if(idx === -1) {
+                editBox.querySelector('.cancel-edit-btn').addEventListener('click', () => {
+                    container.innerHTML = '';
+                    container.classList.remove('active');
+                });
+            }
+
+            // Delete Logic
+            const deleteBtn = editBox.querySelector('.delete-shift-btn');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', () => {
+                    if(!confirm("Are you sure you want to delete this shift?")) return;
+                    this.editState[bhId].splice(idx, 1);
+                    this.hasChanges[bhId] = true;
+                    this.renderBusinessHours();
+                });
+            }
+
+            // "DONE" Button Logic
+            editBox.querySelector('.confirm-edit-btn').addEventListener('click', () => {
+                try {
+                    const name = editBox.querySelector('.edit-name').value.trim();
+                    const start = editBox.querySelector('.edit-start').value;
+                    const end = editBox.querySelector('.edit-end').value;
+                    const days = Array.from(editBox.querySelectorAll('.day-pill.selected')).map(el => el.dataset.day);
+
+                    // Validation
+                    if (!name) throw new Error("Name is required.");
+                    if (days.length === 0) throw new Error("Select at least one day.");
+                    if (!start || !end) throw new Error("Start and End times required.");
+                    if (start >= end) throw new Error("Start time must be before End time.");
+
+                    // Conflict Check (Filtered correctly)
+                    const tempShifts = this.editState[bhId];
+                    const otherShifts = tempShifts.filter((_, i) => i !== idx);
+
+                    // Duplicate Name Check
+                    if (otherShifts.some(s => (s.name || '').trim().toLowerCase() === name.toLowerCase())) {
+                        throw new Error(`Name "${name}" is already used.`);
+                    }
+
+                    // Overlap Check
+                    const conflict = this.checkConflicts({ name, startTime: start, endTime: end, days }, otherShifts);
+                    if (conflict) throw new Error(conflict);
+
+                    // Commit Changes
+                    if(idx === -1) {
+                        this.editState[bhId].push({ name, startTime: start, endTime: end, days });
+                    } else {
+                        this.editState[bhId][idx] = { name, startTime: start, endTime: end, days };
+                    }
+                    
+                    this.hasChanges[bhId] = true;
+                    this.renderBusinessHours();
+
+                } catch (e) {
+                    this.showNotification(e.message, 'error');
+                }
+            });
         }
 
         checkConflicts(candidate, existingShifts) {
@@ -640,7 +560,7 @@
                     const eStart = parseInt(existing.startTime.replace(':', ''));
                     const eEnd = parseInt(existing.endTime.replace(':', ''));
                     if (cStart < eEnd && cEnd > eStart) {
-                        return `Overlap detected on ${day} with "${existing.name}"`;
+                        return `Overlap: ${day} with "${existing.name}"`;
                     }
                 }
             }
