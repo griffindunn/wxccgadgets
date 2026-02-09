@@ -1,3 +1,4 @@
+```markdown
 # Supervisor Controls Gadget for Webex Contact Center
 
 **Supervisor Controls** is a custom desktop gadget that allows Webex Contact Center supervisors to view and update **Global Variables** and **Business Hour Calendars** directly from the Supervisor Desktop.
@@ -40,3 +41,66 @@
         "maximizeAreaName": "app-maximize-area"
     }
 }
+
+```
+
+> **⚠️ Important:** The component tag must be exactly `"supervisor-controls"`.
+
+### 3. Verify
+
+1. Upload the modified JSON layout back to Control Hub.
+2. Sign in to the **Supervisor Desktop**.
+3. Ensure the gadget loads and displays the "Supervisor Controls" header.
+
+## Developer Notes
+
+* **Source Code:** The source logic is maintained in `SupervisorControls.js`.
+* **Production Build:** The production file `SupervisorControls.min.js` is minified for performance.
+* **Security:** This gadget relies on the `$STORE.auth.accessToken` injected by the desktop. It will not run outside of the Webex environment.
+
+### 🔑 Desktop Store Attributes Reference ($STORE)
+
+The Agent Desktop provides a global `$STORE` object that allows gadgets to access real-time context. The following attributes can be mapped in your layout JSON to pass data into the gadget:
+
+#### Authentication (`$STORE.auth`)
+
+| Attribute | Description |
+| --- | --- |
+| `$STORE.auth.accessToken` | The bearer token used for authenticated REST API calls. |
+| `$STORE.auth.refreshToken` | The token used to refresh the session access token. |
+
+#### Agent Context (`$STORE.agent`)
+
+| Attribute | Description |
+| --- | --- |
+| `$STORE.agent.orgId` | The unique identifier for your Webex Contact Center organization. |
+| `$STORE.agent.agentId` | The unique ID of the currently logged-in agent. |
+| `$STORE.agent.agentName` | The display name of the agent. |
+| `$STORE.agent.sub` | The unique subject identifier (UUID) for the user. |
+| `$STORE.agent.state` | The current availability status (e.g., Available, Idle). |
+
+#### App & Environment (`$STORE.app`)
+
+| Attribute | Description |
+| --- | --- |
+| `$STORE.app.datacenter` | The AWS region/datacenter the desktop is connected to (e.g., produs1). |
+| `$STORE.app.darkMode` | Boolean indicating if the user has enabled Dark Mode. |
+| `$STORE.app.locale` | The agent's language and region setting (e.g., en-US). |
+| `$STORE.app.viewMode` | Indicates if the desktop is in standard view or a connector/minimized view. |
+
+#### Interaction Data (`$STORE.agentContact`)
+
+| Attribute | Description |
+| --- | --- |
+| `$STORE.agentContact.taskMap` | Object containing all active tasks indexed by Task ID. |
+| `$STORE.agentContact.selectedTaskId` | The ID of the call or chat currently in focus. |
+
+#### System Notifications (`$STORE.generalNotifications`)
+
+| Attribute | Description |
+| --- | --- |
+| `$STORE.generalNotifications.list` | A list of active notifications currently displayed in the desktop's notification center. |
+
+```
+
+```
