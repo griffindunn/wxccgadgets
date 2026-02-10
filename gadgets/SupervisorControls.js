@@ -1,10 +1,10 @@
 /* FILENAME: SupervisorControls.js
    DESCRIPTION: A Webex Contact Center gadget for Supervisors.
-   VERSION: v4.13-SystemSync (Prioritizes Webex System Settings)
+   VERSION: v4.15-FinalRelease (Clean UI, No Header, Auto-Sync)
 */
 
 (function() {
-    const VERSION = "v4.13-SystemSync";
+    const VERSION = "v4.15-FinalRelease";
     
     // --- STYLING SECTION (CSS) ---
     const CSS_STYLES = `
@@ -37,18 +37,8 @@
             --border-color: #444; --border-light: #333;
         }
 
-        .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
-        h2 { color: var(--color-primary); margin: 0; font-weight: 300; }
-        
-        .theme-btn {
-            background: transparent; border: 1px solid var(--border-color);
-            color: var(--text-main); padding: 5px 12px; border-radius: 4px;
-            cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 6px;
-        }
-        .theme-btn:hover { background: var(--border-light); }
-
         h3.category-header {
-            width: 100%; margin: 30px 0 15px; font-size: 0.8rem; font-weight: 700;
+            width: 100%; margin: 10px 0 15px; font-size: 0.8rem; font-weight: 700;
             text-transform: uppercase; color: var(--text-sub);
             border-bottom: 1px solid var(--border-color); padding-bottom: 8px; letter-spacing: 1px;
         }
@@ -185,14 +175,6 @@
     template.innerHTML = `
       <style>${CSS_STYLES}</style>
       <div id="app">
-          <div class="header-row">
-              <h2>Supervisor Controls</h2>
-              <button id="theme-toggle" class="theme-btn">
-                  <span>Theme</span>
-                  <span id="theme-icon">◐</span>
-              </button>
-          </div>
-          <div id="debug-info" style="font-size: 0.8em; color: var(--text-desc); margin-bottom: 10px;">Waiting for connection...</div>
           <div id="content">
               <div id="variables-container"></div>
               <div id="bh-container" style="margin-top: 30px;"></div>
@@ -214,27 +196,13 @@
             this.hasChanges = {};
         }
 
-        // --- NEW: STARTUP CHECK ---
         connectedCallback() {
-            // Check manual preference first
-            const savedTheme = localStorage.getItem('supervisor-gadget-theme');
-            if(savedTheme === 'dark') {
-                this.setDarkTheme(true);
-            } 
-            // Fallback: Check if attribute already exists on load
-            else if (this.getAttribute('is-dark-mode') === 'true' || this.getAttribute('dark-mode') === 'true') {
+            // Check if attribute already exists on load (Rare race condition, but good safety)
+            if (this.getAttribute('is-dark-mode') === 'true' || this.getAttribute('dark-mode') === 'true') {
                 this.setDarkTheme(true);
             }
-
-            // Bind manual toggle
-            this.shadowRoot.getElementById('theme-toggle').addEventListener('click', () => {
-                const isDark = this.shadowRoot.host.classList.contains('dark-theme');
-                this.setDarkTheme(!isDark);
-                localStorage.setItem('supervisor-gadget-theme', !isDark ? 'dark' : 'light');
-            });
         }
 
-        // Listen for BOTH attribute names to be safe
         static get observedAttributes() { return ['token', 'org-id', 'data-center', 'is-dark-mode', 'dark-mode']; }
 
         attributeChangedCallback(name, oldValue, newValue) {
@@ -247,16 +215,11 @@
             
             // --- DARK MODE SYNC ---
             if (name === 'is-dark-mode' || name === 'dark-mode') {
-                // Logic: If Webex sends a signal, it overrides manual preference.
                 const isDark = (newValue === 'true' || newValue === 'dark' || newValue === true);
-                this.updateDebugDisplay(`Theme Signal: ${newValue}`);
                 this.setDarkTheme(isDark);
-                // Clear manual override so we stay in sync with the system from now on
-                localStorage.removeItem('supervisor-gadget-theme');
             }
             
             if (this.ctx.token && this.ctx.orgId && this.ctx.baseUrl) {
-                this.updateDebugDisplay(`Connected: ${this.ctx.orgId}`);
                 this.loadAllData();
             }
         }
@@ -264,10 +227,8 @@
         setDarkTheme(enable) {
             if (enable) {
                 this.shadowRoot.host.classList.add('dark-theme');
-                this.shadowRoot.getElementById('theme-icon').innerText = '☾';
             } else {
                 this.shadowRoot.host.classList.remove('dark-theme');
-                this.shadowRoot.getElementById('theme-icon').innerText = '☀';
             }
         }
 
@@ -281,11 +242,6 @@
                 'ca1': 'https://api.wxcc-ca1.cisco.com'
             };
             return map[cleanDc] || map['us1'];
-        }
-
-        updateDebugDisplay(msg) {
-            const debugEl = this.shadowRoot.getElementById('debug-info');
-            debugEl.innerText = msg;
         }
 
         async loadAllData() {
