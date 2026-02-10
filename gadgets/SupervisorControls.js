@@ -1,10 +1,10 @@
 /* FILENAME: SupervisorControls.js
    DESCRIPTION: A Webex Contact Center gadget for Supervisors.
-   VERSION: v4.12-ForceDark (Includes Manual Theme Toggle & Startup Check)
+   VERSION: v4.13-SystemSync (Prioritizes Webex System Settings)
 */
 
 (function() {
-    const VERSION = "v4.12-ForceDark";
+    const VERSION = "v4.13-SystemSync";
     
     // --- STYLING SECTION (CSS) ---
     const CSS_STYLES = `
@@ -28,7 +28,7 @@
             transition: background-color 0.3s ease;
         }
 
-        /* DARK MODE OVERRIDES (Applied via class 'dark-theme') */
+        /* DARK MODE OVERRIDES */
         :host(.dark-theme) {
             --bg-app: #121212; --bg-card: #1e1e1e; --bg-header: #252525;
             --bg-input: #2c2c2c; --bg-shift-row: #2a2a2a; --bg-shift-row-hover: #333;
@@ -37,11 +37,9 @@
             --border-color: #444; --border-light: #333;
         }
 
-        /* HEADER LAYOUT */
         .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
         h2 { color: var(--color-primary); margin: 0; font-weight: 300; }
         
-        /* THEME TOGGLE BUTTON */
         .theme-btn {
             background: transparent; border: 1px solid var(--border-color);
             color: var(--text-main); padding: 5px 12px; border-radius: 4px;
@@ -214,16 +212,17 @@
             this.data = { variables: [], businessHours: [] };
             this.editState = {}; 
             this.hasChanges = {};
-            this.manualTheme = false; // Track manual override
         }
 
         // --- NEW: STARTUP CHECK ---
         connectedCallback() {
-            // Check if dark mode is already set by local storage or attribute
+            // Check manual preference first
             const savedTheme = localStorage.getItem('supervisor-gadget-theme');
             if(savedTheme === 'dark') {
                 this.setDarkTheme(true);
-            } else if (this.hasAttribute('is-dark-mode') && this.getAttribute('is-dark-mode') === 'true') {
+            } 
+            // Fallback: Check if attribute already exists on load
+            else if (this.getAttribute('is-dark-mode') === 'true' || this.getAttribute('dark-mode') === 'true') {
                 this.setDarkTheme(true);
             }
 
@@ -235,7 +234,8 @@
             });
         }
 
-        static get observedAttributes() { return ['token', 'org-id', 'data-center', 'is-dark-mode']; }
+        // Listen for BOTH attribute names to be safe
+        static get observedAttributes() { return ['token', 'org-id', 'data-center', 'is-dark-mode', 'dark-mode']; }
 
         attributeChangedCallback(name, oldValue, newValue) {
             if (name === 'token') this.ctx.token = newValue;
@@ -244,12 +244,15 @@
                 this.ctx.region = newValue;
                 this.ctx.baseUrl = this.resolveApiUrl(newValue);
             }
-            // Sync with Webex
-            if (name === 'is-dark-mode') {
-                this.updateDebugDisplay(`Webex Mode: ${newValue}`);
-                if (!localStorage.getItem('supervisor-gadget-theme')) {
-                    this.setDarkTheme(newValue === 'true' || newValue === 'dark');
-                }
+            
+            // --- DARK MODE SYNC ---
+            if (name === 'is-dark-mode' || name === 'dark-mode') {
+                // Logic: If Webex sends a signal, it overrides manual preference.
+                const isDark = (newValue === 'true' || newValue === 'dark' || newValue === true);
+                this.updateDebugDisplay(`Theme Signal: ${newValue}`);
+                this.setDarkTheme(isDark);
+                // Clear manual override so we stay in sync with the system from now on
+                localStorage.removeItem('supervisor-gadget-theme');
             }
             
             if (this.ctx.token && this.ctx.orgId && this.ctx.baseUrl) {
