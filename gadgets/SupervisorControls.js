@@ -1,10 +1,10 @@
 /* FILENAME: SupervisorControls.js
    DESCRIPTION: A Webex Contact Center gadget for Supervisors.
-   VERSION: v4.9-AutoAlign (Dynamic Width Calculation for Perfect Alignment)
+   VERSION: v4.10-DarkSync (Full Webex Theme Synchronization)
 */
 
 (function() {
-    const VERSION = "v4.9-AutoAlign";
+    const VERSION = "v4.10-DarkSync";
     
     // --- STYLING SECTION (CSS) ---
     const CSS_STYLES = `
@@ -19,14 +19,15 @@
             --color-success: #2fb16c; --color-danger: #dc3545;
 
             /* DYNAMIC VARIABLES (Calculated by JS on load) */
-            --label-width: 180px;      /* Default, will expand for long names */
-            --card-min-width: 450px;   /* Default, will expand to match widest card */
+            --label-width: 180px;      
+            --card-min-width: 450px;   
 
             display: block; font-family: "CiscoSans", "Helvetica Neue", Helvetica, Arial, sans-serif;
             background-color: var(--bg-app); color: var(--text-main);
             height: 100%; overflow-y: auto; padding: 20px; box-sizing: border-box;
         }
 
+        /* 1. OS Preference Fallback (Standard Dark Mode) */
         @media (prefers-color-scheme: dark) {
             :host {
                 --bg-app: #121212; --bg-card: #1e1e1e; --bg-header: #252525;
@@ -35,6 +36,15 @@
                 --text-main: #e0e0e0; --text-sub: #ccc; --text-desc: #aaa; --text-input: #fff;
                 --border-color: #444; --border-light: #333;
             }
+        }
+
+        /* 2. Webex App Forced Dark Mode (Overrides OS if set via attribute) */
+        :host([dark-mode="true"]) {
+            --bg-app: #121212; --bg-card: #1e1e1e; --bg-header: #252525;
+            --bg-input: #2c2c2c; --bg-shift-row: #2a2a2a; --bg-shift-row-hover: #333;
+            --bg-edit-box: #2c3e50; --bg-new-area: #222;
+            --text-main: #e0e0e0; --text-sub: #ccc; --text-desc: #aaa; --text-input: #fff;
+            --border-color: #444; --border-light: #333;
         }
 
         h2 { color: var(--color-primary); margin: 0 0 25px; font-weight: 300; }
@@ -52,12 +62,6 @@
         .var-row {
             background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;
             padding: 16px; display: flex; align-items: flex-start; transition: box-shadow 0.2s;
-            
-            /* DYNAMIC SIZING: 
-               1. Grow is 0 (don't stretch wildly).
-               2. Shrink is 0 (don't squash).
-               3. Base is auto (respect content).
-               4. Min-width is calculated to ensure ALL cards are as wide as the widest one. */
             flex: 0 0 auto; 
             min-width: var(--card-min-width); 
             max-width: 100%; 
@@ -65,7 +69,6 @@
         .var-row:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
         
         .var-info { 
-            /* Label width is calculated to fit the longest name perfectly */
             flex: 0 0 var(--label-width); 
             margin-right: 20px; margin-top: 8px; 
             overflow-wrap: break-word; 
@@ -207,7 +210,8 @@
             this.hasChanges = {};
         }
 
-        static get observedAttributes() { return ['token', 'org-id', 'data-center']; }
+        // --- NEW: Watch for 'dark-mode' attribute ---
+        static get observedAttributes() { return ['token', 'org-id', 'data-center', 'dark-mode']; }
 
         attributeChangedCallback(name, oldValue, newValue) {
             if (name === 'token') this.ctx.token = newValue;
@@ -216,6 +220,8 @@
                 this.ctx.region = newValue;
                 this.ctx.baseUrl = this.resolveApiUrl(newValue);
             }
+            // Note: CSS selector :host([dark-mode="true"]) handles the visual switch automatically.
+            
             if (this.ctx.token && this.ctx.orgId && this.ctx.baseUrl) {
                 this.updateDebugDisplay();
                 this.loadAllData();
@@ -302,9 +308,7 @@
                 return a.name.localeCompare(b.name);
             });
 
-            // --- CALCULATE DYNAMIC WIDTHS ---
-            // This logic measures the longest variable name (likely Global_FeedbackSurveyOptIn)
-            // and sets the CSS variables so ALL cards match this width initially.
+            // --- DYNAMIC LAYOUT CALCULATION ---
             const metrics = this.calculateLayoutMetrics(vars);
             this.style.setProperty('--label-width', `${metrics.labelWidth}px`);
             this.style.setProperty('--card-min-width', `${metrics.cardWidth}px`);
@@ -331,11 +335,9 @@
             );
         }
 
-        // Helper: Calculate ideal widths based on content
         calculateLayoutMetrics(vars) {
             if (!vars || vars.length === 0) return { labelWidth: 150, cardWidth: 450 };
             
-            // Create a temp element to measure text
             const span = document.createElement('span');
             span.style.visibility = 'hidden';
             span.style.position = 'absolute';
@@ -352,9 +354,6 @@
             });
             document.body.removeChild(span);
 
-            // Logic:
-            // Label Width = Text + 20px padding
-            // Card Width = Label + Input (250px) + Button (70px) + Gaps (40px)
             const labelWidth = maxTextWidth + 20;
             const cardWidth = labelWidth + 250 + 70 + 40; 
             
