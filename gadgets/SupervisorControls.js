@@ -1,10 +1,10 @@
 /* FILENAME: SupervisorControls.js
    DESCRIPTION: A Webex Contact Center gadget for Supervisors.
-   VERSION: v4.15-FinalRelease (Clean UI, No Header, Auto-Sync)
+   VERSION: v4.16-FinalFixed (Restored Event Listeners)
 */
 
 (function() {
-    const VERSION = "v4.15-FinalRelease";
+    const VERSION = "v4.16-FinalFixed";
     
     // --- STYLING SECTION (CSS) ---
     const CSS_STYLES = `
@@ -376,6 +376,7 @@
                 });
                 container.appendChild(wrapper);
             }
+            // FIX: Restore Event Listeners so buttons work
             this.attachBusinessHoursListeners(container);
         }
 
