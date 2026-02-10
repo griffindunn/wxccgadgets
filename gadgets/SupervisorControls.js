@@ -1,10 +1,10 @@
 /* FILENAME: SupervisorControls.js
    DESCRIPTION: A Webex Contact Center gadget for Supervisors.
-   VERSION: v4.18-Safeguard (Fault-Tolerant Rendering & Event Attachment)
+   VERSION: v4.19-Overrides (Added Business Hour Overrides/Exceptions)
 */
 
 (function() {
-    const VERSION = "v4.18-Safeguard";
+    const VERSION = "v4.19-Overrides";
     
     // --- STYLING SECTION (CSS) ---
     const CSS_STYLES = `
@@ -17,6 +17,7 @@
             --border-color: #dcdcdc; --border-light: #eee; --border-accent: #00bceb;
             --color-primary: #00bceb; --color-primary-hover: #00a0c6;
             --color-success: #2fb16c; --color-danger: #dc3545;
+            --color-override: #f0ad4e; /* Orange for Overrides */
 
             /* DYNAMIC VARIABLES */
             --label-width: 180px;      
@@ -85,6 +86,7 @@
             display: flex; justify-content: space-between; align-items: center;
         }
         .bh-title { font-size: 1rem; font-weight: 600; color: var(--text-main); }
+        .bh-actions { display: flex; gap: 8px; }
         .bh-content { padding: 0; }
 
         .bh-new-shift-area {
@@ -98,6 +100,20 @@
         .bh-day-name { font-size: 0.85rem; font-weight: 700; color: var(--text-sub); margin-bottom: 8px; }
         .bh-day-shifts { display: flex; flex-direction: column; gap: 6px; }
 
+        /* OVERRIDES SECTION */
+        .bh-overrides-section {
+            background: var(--bg-new-area); border-top: 1px solid var(--border-color);
+            padding: 15px 20px;
+        }
+        .bh-overrides-title {
+            font-size: 0.8rem; font-weight: 700; color: var(--text-sub); 
+            text-transform: uppercase; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+        }
+        .badge-override {
+            background: var(--color-override); color: white; padding: 2px 6px; 
+            border-radius: 4px; font-size: 0.7em;
+        }
+
         .shift-row {
             display: grid; grid-template-columns: 1fr 1fr; padding: 8px 12px;
             background: var(--bg-shift-row); border-radius: 4px; cursor: pointer; font-size: 0.9rem;
@@ -106,6 +122,9 @@
         .shift-row-name { color: var(--color-primary); font-weight: 600; }
         .shift-row-time { color: var(--text-desc); text-align: right; }
         .shift-empty { font-size: 0.85rem; color: #999; font-style: italic; padding-left: 12px; }
+
+        /* Override specific row style */
+        .override-row .shift-row-name { color: var(--color-override); }
 
         .shift-edit-box {
             background: var(--bg-edit-box); border: 1px solid var(--border-accent);
@@ -156,6 +175,8 @@
         .btn-secondary:hover { background: var(--border-light); }
         .btn-danger { background: var(--color-danger); color: white; }
         .btn-danger:hover { opacity: 0.9; }
+        .btn-override { background: var(--color-override); color: white; }
+        .btn-override:hover { opacity: 0.9; }
 
         .footer-version { position: fixed; bottom: 8px; left: 15px; font-size: 11px; color: var(--text-desc); pointer-events: none; }
         #toast {
@@ -192,7 +213,8 @@
             
             this.ctx = { token: null, orgId: null, region: null, baseUrl: null };
             this.data = { variables: [], businessHours: [] };
-            this.editState = {}; 
+            this.editState = {}; // Stores workingHours
+            this.overrideState = {}; // Stores overrides
             this.hasChanges = {};
         }
 
@@ -275,9 +297,13 @@
             this.data.businessHours = json.data || [];
             
             this.editState = {};
+            this.overrideState = {};
             this.hasChanges = {};
+            
             this.data.businessHours.forEach(bh => {
                 this.editState[bh.id] = JSON.parse(JSON.stringify(bh.workingHours || []));
+                // Webex calls them 'overrides', sometimes 'exceptions'. We check both.
+                this.overrideState[bh.id] = JSON.parse(JSON.stringify(bh.overrides || bh.exceptions || []));
                 this.hasChanges[bh.id] = false;
             });
         }
@@ -287,21 +313,9 @@
             return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
 
-        // --- SAFE RENDERER (Prevents crashes from stopping the whole gadget) ---
         render() {
-            try {
-                this.renderVariables();
-            } catch (e) {
-                console.error("[SupervisorControls] Variable Render Error:", e);
-                this.shadowRoot.getElementById('variables-container').innerHTML = '<div style="color:red">Error loading variables.</div>';
-            }
-
-            try {
-                this.renderBusinessHours();
-            } catch (e) {
-                console.error("[SupervisorControls] Business Hours Render Error:", e);
-                this.shadowRoot.getElementById('bh-container').innerHTML = '<div style="color:red">Error loading business hours.</div>';
-            }
+            try { this.renderVariables(); } catch (e) { console.error("Var Render Error", e); }
+            try { this.renderBusinessHours(); } catch (e) { console.error("BH Render Error", e); }
         }
 
         renderVariables() {
@@ -315,7 +329,6 @@
                 return a.name.localeCompare(b.name);
             });
 
-            // Calculate metrics safely
             const metrics = this.calculateLayoutMetrics(vars);
             this.style.setProperty('--label-width', `${metrics.labelWidth}px`);
             this.style.setProperty('--card-min-width', `${metrics.cardWidth}px`);
@@ -337,41 +350,32 @@
             });
             container.appendChild(currentWrapper);
 
-            // Click Handlers
             container.querySelectorAll('.save-var-btn').forEach(b => 
                 b.addEventListener('click', e => this.handleSaveVariable(e.currentTarget.dataset.id, e.currentTarget))
             );
         }
 
-        // FIX: Calculate metrics in a try-catch and use shadowRoot to avoid permission errors
         calculateLayoutMetrics(vars) {
             try {
                 if (!vars || vars.length === 0) return { labelWidth: 150, cardWidth: 450 };
-                
                 const span = document.createElement('span');
                 span.style.visibility = 'hidden';
                 span.style.position = 'absolute';
                 span.style.fontFamily = '"CiscoSans", "Helvetica Neue", Helvetica, Arial, sans-serif';
                 span.style.fontWeight = '600';
                 span.style.fontSize = '0.95rem';
-                
-                // Use shadowRoot instead of document.body for safety
                 this.shadowRoot.appendChild(span);
-
                 let maxTextWidth = 100;
                 vars.forEach(v => {
                     span.innerText = v.name;
                     const w = span.offsetWidth;
                     if(w > maxTextWidth) maxTextWidth = w;
                 });
-                
                 this.shadowRoot.removeChild(span);
-
                 const labelWidth = maxTextWidth + 20;
                 const cardWidth = labelWidth + 250 + 70 + 40; 
                 return { labelWidth, cardWidth };
             } catch (e) {
-                console.warn("[SupervisorControls] Layout calc failed, using defaults", e);
                 return { labelWidth: 150, cardWidth: 450 };
             }
         }
@@ -388,12 +392,12 @@
                 
                 this.data.businessHours.forEach(bh => {
                     const shifts = this.editState[bh.id] || [];
+                    const overrides = this.overrideState[bh.id] || [];
                     const isDirty = this.hasChanges[bh.id];
-                    wrapper.appendChild(this.buildBusinessHoursCard(bh, shifts, isDirty));
+                    wrapper.appendChild(this.buildBusinessHoursCard(bh, shifts, overrides, isDirty));
                 });
                 container.appendChild(wrapper);
             }
-            // CRITICAL: Attach listeners at the end
             this.attachBusinessHoursListeners(container);
         }
 
@@ -402,7 +406,6 @@
             const safeName = this.escapeHtml(v.name);
             const safeDesc = this.escapeHtml(v.description);
             const safeVal = this.escapeHtml(v.defaultValue || '');
-            
             let inputHtml = '';
 
             if (vType === 'BOOLEAN') {
@@ -430,18 +433,17 @@
                 </div>`;
         }
 
-        buildBusinessHoursCard(bh, shifts, isDirty) {
+        buildBusinessHoursCard(bh, shifts, overrides, isDirty) {
             const card = document.createElement('div');
             card.className = 'bh-card';
             
+            // --- SHIFTS SECTION ---
             const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
             const shortDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
             
             let daysHtml = '';
-
             daysOfWeek.forEach((dayName, dayIndex) => {
                 const dayCode = shortDays[dayIndex];
-                
                 const activeShifts = shifts
                     .map((s, idx) => ({ ...s, originalIndex: idx }))
                     .filter(s => s.days && s.days.includes(dayCode))
@@ -452,20 +454,31 @@
                     rowsHtml = `<div class="shift-empty">No Shifts</div>`;
                 } else {
                     rowsHtml = activeShifts.map(s => `
-                        <div class="shift-row" data-bh="${bh.id}" data-idx="${s.originalIndex}">
+                        <div class="shift-row" data-bh="${bh.id}" data-idx="${s.originalIndex}" data-type="shift">
                             <div class="shift-row-name">${this.escapeHtml(s.name)}</div>
                             <div class="shift-row-time">${this.formatTime(s.startTime)} - ${this.formatTime(s.endTime)}</div>
                         </div>
                     `).join('');
                 }
-
                 daysHtml += `
                     <div class="bh-day-group">
                         <div class="bh-day-name">${dayName}</div>
                         <div class="bh-day-shifts">${rowsHtml}</div>
-                    </div>
-                `;
+                    </div>`;
             });
+
+            // --- OVERRIDES SECTION ---
+            let overridesHtml = '';
+            if (overrides.length === 0) {
+                overridesHtml = `<div class="shift-empty">No active overrides</div>`;
+            } else {
+                overridesHtml = overrides.map((o, idx) => `
+                    <div class="shift-row override-row" data-bh="${bh.id}" data-idx="${idx}" data-type="override">
+                        <div class="shift-row-name">${this.escapeHtml(o.name)}</div>
+                        <div class="shift-row-time">${this.formatDateTime(o.startDateTime || o.startTime)} - ${this.formatDateTime(o.endDateTime || o.endTime)}</div>
+                    </div>
+                `).join('');
+            }
 
             card.innerHTML = `
                 <div class="bh-header">
@@ -473,10 +486,17 @@
                         <div class="bh-title">${this.escapeHtml(bh.name)}</div>
                         ${bh.description ? `<div class="var-desc">${this.escapeHtml(bh.description)}</div>` : ''}
                     </div>
-                    <button class="btn btn-black add-shift-btn" data-bh="${bh.id}">Add Shift</button>
+                    <div class="bh-actions">
+                        <button class="btn btn-black add-shift-btn" data-bh="${bh.id}">Add Shift</button>
+                        <button class="btn btn-override add-override-btn" data-bh="${bh.id}">Add Override</button>
+                    </div>
                 </div>
                 <div id="new-shift-container-${bh.id}" class="bh-new-shift-area"></div>
                 <div class="bh-content">${daysHtml}</div>
+                <div class="bh-overrides-section">
+                    <div class="bh-overrides-title">Exceptions / Holidays <span class="badge-override">Overrides</span></div>
+                    <div class="bh-day-shifts">${overridesHtml}</div>
+                </div>
                 <div class="bh-save-bar ${isDirty ? 'visible' : ''}">
                     <button class="btn btn-success save-bh-btn" data-bh="${bh.id}">Save Changes</button>
                 </div>`;
@@ -485,36 +505,50 @@
 
         attachBusinessHoursListeners(root) {
             root.querySelectorAll('.add-shift-btn').forEach(b => 
-                b.addEventListener('click', e => this.openAddShiftUI(e.currentTarget.dataset.bh))
+                b.addEventListener('click', e => this.openAddUI(e.currentTarget.dataset.bh, 'shift'))
+            );
+            root.querySelectorAll('.add-override-btn').forEach(b => 
+                b.addEventListener('click', e => this.openAddUI(e.currentTarget.dataset.bh, 'override'))
             );
             root.querySelectorAll('.save-bh-btn').forEach(b => 
                 b.addEventListener('click', e => this.handleSaveBusinessHours(e.currentTarget.dataset.bh, e.currentTarget))
             );
+            
+            // Handle both Shifts and Overrides clicks
             root.querySelectorAll('.shift-row').forEach(row => {
                 row.addEventListener('click', e => {
                     if(row.nextElementSibling && row.nextElementSibling.classList.contains('shift-edit-box')) return;
-                    this.openEditShiftUI(e.currentTarget.dataset.bh, e.currentTarget.dataset.idx, e.currentTarget);
+                    const type = e.currentTarget.dataset.type || 'shift';
+                    this.openEditUI(e.currentTarget.dataset.bh, e.currentTarget.dataset.idx, e.currentTarget, type);
                 });
             });
         }
 
-        openAddShiftUI(bhId) {
+        openAddUI(bhId, type) {
             const container = this.shadowRoot.getElementById(`new-shift-container-${bhId}`);
             if (!container) return;
 
-            const defaultShift = { name: "New Shift", startTime: "09:00", endTime: "17:00", days: [] };
-            container.innerHTML = this.getShiftEditHTML(defaultShift, true);
-            container.classList.add('active');
+            let defaultObj = {};
+            if (type === 'shift') {
+                defaultObj = { name: "New Shift", startTime: "09:00", endTime: "17:00", days: [] };
+            } else {
+                const now = new Date();
+                const isoStart = now.toISOString().slice(0, 16); // YYYY-MM-DDTHH:mm
+                const isoEnd = new Date(now.getTime() + 86400000).toISOString().slice(0, 16);
+                defaultObj = { name: "New Override", startDateTime: isoStart, endDateTime: isoEnd };
+            }
 
-            // Pass the container directly
-            this.attachShiftEditHandlers(container, bhId, -1);
+            container.innerHTML = this.getEditHTML(defaultObj, true, type);
+            container.classList.add('active');
+            this.attachEditHandlers(container, bhId, -1, type);
         }
 
-        openEditShiftUI(bhId, idxString, rowEl) {
+        openEditUI(bhId, idxString, rowEl, type) {
             const idx = parseInt(idxString, 10);
-            const shift = this.editState[bhId][idx];
+            const list = type === 'shift' ? this.editState[bhId] : this.overrideState[bhId];
+            const item = list[idx];
             
-            rowEl.insertAdjacentHTML('afterend', this.getShiftEditHTML(shift, false));
+            rowEl.insertAdjacentHTML('afterend', this.getEditHTML(item, false, type));
             const editBox = rowEl.nextElementSibling;
             rowEl.style.display = 'none'; 
 
@@ -523,28 +557,25 @@
                 rowEl.style.display = 'grid';
             }, { once: true });
 
-            // Pass the specific edit box
-            this.attachShiftEditHandlers(editBox, bhId, idx, rowEl);
+            this.attachEditHandlers(editBox, bhId, idx, type, rowEl);
         }
 
-        // REFACTORED: Safe for both New (Container) and Edit (Sibling) modes
-        attachShiftEditHandlers(targetElement, bhId, idx, rowEl = null) {
+        attachEditHandlers(targetElement, bhId, idx, type, rowEl = null) {
             const editBox = targetElement.classList.contains('shift-edit-box') 
-                ? targetElement 
-                : targetElement.querySelector('.shift-edit-box');
+                ? targetElement : targetElement.querySelector('.shift-edit-box');
+            if (!editBox) return;
 
-            if (!editBox) { console.error("Error: Edit Box not found"); return; }
-
-            editBox.querySelectorAll('.day-pill').forEach(t => {
-                t.addEventListener('click', (e) => {
-                    e.currentTarget.classList.toggle('selected');
-                    if(e.currentTarget.classList.contains('selected')) {
-                        e.currentTarget.innerHTML = `&#10003; ${e.currentTarget.dataset.day}`;
-                    } else {
-                        e.currentTarget.innerText = e.currentTarget.dataset.day;
-                    }
+            // Day Pills (Only for Shifts)
+            if (type === 'shift') {
+                editBox.querySelectorAll('.day-pill').forEach(t => {
+                    t.addEventListener('click', (e) => {
+                        e.currentTarget.classList.toggle('selected');
+                        e.currentTarget.innerHTML = e.currentTarget.classList.contains('selected') 
+                            ? `&#10003; ${e.currentTarget.dataset.day}` 
+                            : e.currentTarget.dataset.day;
+                    });
                 });
-            });
+            }
 
             if(idx === -1) {
                 editBox.querySelector('.cancel-edit-btn').addEventListener('click', () => {
@@ -558,98 +589,93 @@
             const deleteBtn = editBox.querySelector('.delete-shift-btn');
             if (deleteBtn) {
                 deleteBtn.addEventListener('click', () => {
-                    const normalView = editBox.querySelector('.edit-normal-view');
-                    normalView.style.display = 'none';
-
-                    const confirmHtml = `
-                        <div class="delete-confirm-view">
-                            <div style="margin-bottom: 15px; font-weight:600; color: var(--text-main);">Are you sure you want to delete this shift?</div>
-                            <div style="display:flex; justify-content:center; gap:10px;">
-                                <button class="btn btn-secondary cancel-del-btn">No, Keep it</button>
-                                <button class="btn btn-danger confirm-del-btn">Yes, Delete</button>
-                            </div>
-                        </div>`;
-                    editBox.insertAdjacentHTML('beforeend', confirmHtml);
-
-                    editBox.querySelector('.cancel-del-btn').addEventListener('click', () => {
-                        editBox.querySelector('.delete-confirm-view').remove();
-                        normalView.style.display = 'block';
-                    });
-
-                    editBox.querySelector('.confirm-del-btn').addEventListener('click', () => {
-                        this.editState[bhId].splice(idx, 1);
-                        this.hasChanges[bhId] = true;
-                        this.renderBusinessHours();
-                    });
+                    const list = type === 'shift' ? this.editState[bhId] : this.overrideState[bhId];
+                    list.splice(idx, 1);
+                    this.hasChanges[bhId] = true;
+                    this.renderBusinessHours();
                 });
             }
 
             editBox.querySelector('.confirm-edit-btn').addEventListener('click', () => {
                 const name = editBox.querySelector('.edit-name').value.trim();
-                const start = editBox.querySelector('.edit-start').value;
-                const end = editBox.querySelector('.edit-end').value;
-                const days = Array.from(editBox.querySelectorAll('.day-pill.selected')).map(el => el.dataset.day);
-
-                const validation = this.validateShift(name, start, end, days);
-                if (validation) { this.showNotification(validation, 'error'); return; }
-
-                const tempShifts = [...this.editState[bhId]];
-                const otherShifts = idx === -1 ? tempShifts : tempShifts.filter((_, i) => i !== idx);
-
-                const isDuplicate = otherShifts.some(s => (s.name || '').trim().toLowerCase() === name.toLowerCase());
-                if (isDuplicate) { 
-                    this.showNotification(`Error: Shift name "${name}" already exists.`, 'error'); 
-                    return; 
-                }
-
-                const conflict = this.checkConflicts({ name, startTime: start, endTime: end, days }, otherShifts);
-                if (conflict) { this.showNotification(conflict, 'error'); return; }
-
-                if(idx === -1) {
-                    this.editState[bhId].push({ name, startTime: start, endTime: end, days });
+                
+                let newItem = { name };
+                
+                if (type === 'shift') {
+                    const start = editBox.querySelector('.edit-start').value;
+                    const end = editBox.querySelector('.edit-end').value;
+                    const days = Array.from(editBox.querySelectorAll('.day-pill.selected')).map(el => el.dataset.day);
+                    
+                    if (!name || !start || !end || days.length === 0) { 
+                        this.showNotification("Please fill all fields", "error"); return; 
+                    }
+                    newItem = { ...newItem, startTime: start, endTime: end, days };
                 } else {
-                    this.editState[bhId][idx] = { name, startTime: start, endTime: end, days };
+                    const start = editBox.querySelector('.edit-start-dt').value;
+                    const end = editBox.querySelector('.edit-end-dt').value;
+                    if (!name || !start || !end) { 
+                        this.showNotification("Please fill all fields", "error"); return; 
+                    }
+                    newItem = { ...newItem, startDateTime: start + ":00Z", endDateTime: end + ":00Z" };
                 }
+
+                const list = type === 'shift' ? this.editState[bhId] : this.overrideState[bhId];
+                
+                if(idx === -1) list.push(newItem);
+                else list[idx] = newItem;
                 
                 this.hasChanges[bhId] = true;
                 this.renderBusinessHours();
             });
         }
 
-        getShiftEditHTML(shift, isNew) {
-            const allDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-            const safeName = this.escapeHtml(shift.name || '');
-            const deleteBtnHtml = isNew ? '<div></div>' : '<button class="btn btn-danger delete-shift-btn">Delete Shift</button>';
+        getEditHTML(item, isNew, type) {
+            const safeName = this.escapeHtml(item.name || '');
+            const deleteBtn = isNew ? '' : `<button class="btn btn-danger delete-shift-btn">Delete ${type === 'shift' ? 'Shift' : 'Override'}</button>`;
+            
+            let contentHtml = '';
+            
+            if (type === 'shift') {
+                const allDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+                const pills = allDays.map(d => `
+                    <div class="day-pill ${item.days.includes(d) ? 'selected' : ''}" data-day="${d}">
+                        ${item.days.includes(d) ? '&#10003;' : ''} ${d}
+                    </div>`).join('');
+                
+                contentHtml = `
+                    <div class="edit-row">
+                        <div class="form-group"><span class="form-label">Time</span>
+                            <div style="display:flex;align-items:center;gap:5px;">
+                                <input type="time" class="edit-start" value="${item.startTime}"><span>to</span><input type="time" class="edit-end" value="${item.endTime}">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top:10px;"><span class="form-label">Days</span><div class="day-pills">${pills}</div></div>`;
+            } else {
+                // Override Inputs (DateTime)
+                // Convert ISO Z time to local input format (YYYY-MM-DDTHH:mm) for input type="datetime-local"
+                const fmt = (iso) => iso ? iso.slice(0, 16) : ''; 
+                contentHtml = `
+                    <div class="edit-row">
+                        <div class="form-group"><span class="form-label">Start Date/Time</span>
+                            <input type="datetime-local" class="edit-start-dt" value="${fmt(item.startDateTime || item.startTime)}">
+                        </div>
+                        <div class="form-group"><span class="form-label">End Date/Time</span>
+                            <input type="datetime-local" class="edit-end-dt" value="${fmt(item.endDateTime || item.endTime)}">
+                        </div>
+                    </div>`;
+            }
 
             return `
                 <div class="shift-edit-box">
                     <div class="edit-normal-view">
-                        <div class="edit-row">
-                            <div class="form-group">
-                                <span class="form-label">Name</span>
-                                <input type="text" class="edit-name" value="${safeName}" style="width:180px;">
-                            </div>
-                            <div class="form-group">
-                                <span class="form-label">Time Duration</span>
-                                <div style="display:flex;align-items:center;gap:5px;">
-                                    <input type="time" class="edit-start" value="${shift.startTime}">
-                                    <span>to</span>
-                                    <input type="time" class="edit-end" value="${shift.endTime}">
-                                </div>
-                            </div>
+                        <div class="form-group" style="margin-bottom:10px;">
+                            <span class="form-label">Name</span>
+                            <input type="text" class="edit-name" value="${safeName}" style="width:100%;">
                         </div>
-                        <div class="form-group" style="margin-top: 10px;">
-                            <span class="form-label">Days Active</span>
-                            <div class="day-pills">
-                                ${allDays.map(d => `
-                                    <div class="day-pill ${shift.days.includes(d) ? 'selected' : ''}" data-day="${d}">
-                                        ${shift.days.includes(d) ? '&#10003;' : ''} ${d}
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-top:15px; border-top: 1px solid var(--border-light); padding-top: 10px;">
-                            ${deleteBtnHtml}
+                        ${contentHtml}
+                        <div style="display:flex; justify-content:space-between; margin-top:15px; border-top:1px solid var(--border-light); padding-top:10px;">
+                            <div>${deleteBtn}</div>
                             <div style="display:flex; gap:10px;">
                                 <button class="btn btn-secondary cancel-edit-btn">Cancel</button>
                                 <button class="btn btn-primary confirm-edit-btn">Done</button>
@@ -659,39 +685,17 @@
                 </div>`;
         }
 
-        validateShift(name, start, end, days) {
-            if (!name) return "Name is required.";
-            if (days.length === 0) return "Select at least one day.";
-            if (!start || !end) return "Start and End times required.";
-            if (start >= end) return "Start time must be before End time.";
-            return null;
-        }
-
-        checkConflicts(candidate, existingShifts) {
-            const cStart = parseInt(candidate.startTime.replace(':', ''));
-            const cEnd = parseInt(candidate.endTime.replace(':', ''));
-
-            for (const day of candidate.days) {
-                const dayShifts = existingShifts.filter(s => s.days.includes(day));
-                for (const existing of dayShifts) {
-                    const eStart = parseInt(existing.startTime.replace(':', ''));
-                    const eEnd = parseInt(existing.endTime.replace(':', ''));
-                    if (cStart < eEnd && cEnd > eStart) {
-                        return `Overlap detected on ${day} with "${existing.name}"`;
-                    }
-                }
-            }
-            return null; 
-        }
-
         async handleSaveBusinessHours(bhId, btnElement) {
             const originalText = btnElement.innerText;
             btnElement.disabled = true;
             btnElement.innerText = "Saving...";
 
-            const finalShifts = this.editState[bhId];
             const originalBh = this.data.businessHours.find(b => b.id === bhId);
-            const payload = { ...originalBh, workingHours: finalShifts };
+            const payload = { 
+                ...originalBh, 
+                workingHours: this.editState[bhId],
+                overrides: this.overrideState[bhId] // Include overrides in save payload
+            };
 
             try {
                 const v2Url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/business-hours/${bhId}`;
@@ -701,47 +705,31 @@
                     body: JSON.stringify(payload)
                 });
 
-                if (res.status === 404) {
-                    const v1Url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/business-hours/${bhId}`;
-                    res = await fetch(v1Url, {
-                        method: 'PUT',
-                        headers: { 'Authorization': `Bearer ${this.ctx.token}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                }
-
-                if (!res.ok) {
-                    const txt = await res.text();
-                    throw new Error(`API Error ${res.status}: ${txt}`);
-                }
+                if (!res.ok) throw new Error(`API Error ${res.status}`);
                 
-                originalBh.workingHours = JSON.parse(JSON.stringify(finalShifts));
                 this.hasChanges[bhId] = false;
                 this.showNotification(`Saved "${originalBh.name}"`, 'success');
                 this.renderBusinessHours();
 
             } catch (err) {
                 this.showNotification(`Save Failed: ${err.message}`, 'error');
+            } finally {
                 btnElement.disabled = false;
                 btnElement.innerText = originalText;
             }
         }
 
         async handleSaveVariable(varId, btnElement) {
+            // (Same variable save logic as v4.18)
             const input = this.shadowRoot.getElementById(`input-${varId}`);
             let newValue = input.value;
             const originalText = btnElement.innerText;
             btnElement.disabled = true;
             btnElement.innerText = "...";
-
             const originalVar = this.data.variables.find(v => v.id === varId);
             const vType = (originalVar.variableType || '').toUpperCase();
-            
-            if (vType === 'BOOLEAN') {
-                newValue = (newValue === 'true');
-            } else if (vType === 'NUMBER' || vType === 'INTEGER') {
-                newValue = Number(newValue);
-            }
+            if (vType === 'BOOLEAN') newValue = (newValue === 'true');
+            else if (vType === 'NUMBER' || vType === 'INTEGER') newValue = Number(newValue);
 
             try {
                 const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/cad-variable/${varId}`;
@@ -769,6 +757,13 @@
             const ampm = hour >= 12 ? 'PM' : 'AM';
             const hour12 = hour % 12 || 12;
             return `${hour12}:${m} ${ampm}`;
+        }
+
+        formatDateTime(iso) {
+            if(!iso) return '';
+            const d = new Date(iso);
+            if(isNaN(d.getTime())) return iso; // Fallback if not date
+            return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
 
         showNotification(msg, type) {
