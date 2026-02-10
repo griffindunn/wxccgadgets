@@ -1,10 +1,10 @@
 /* FILENAME: SupervisorControls.js
    DESCRIPTION: A Webex Contact Center gadget for Supervisors.
-   VERSION: v4.10-DarkSync (Full Webex Theme Synchronization)
+   VERSION: v4.11-Standardized (Matches Webex "is-dark-mode" convention)
 */
 
 (function() {
-    const VERSION = "v4.10-DarkSync";
+    const VERSION = "v4.11-Standardized";
     
     // --- STYLING SECTION (CSS) ---
     const CSS_STYLES = `
@@ -27,7 +27,7 @@
             height: 100%; overflow-y: auto; padding: 20px; box-sizing: border-box;
         }
 
-        /* 1. OS Preference Fallback (Standard Dark Mode) */
+        /* 1. OS Preference Fallback */
         @media (prefers-color-scheme: dark) {
             :host {
                 --bg-app: #121212; --bg-card: #1e1e1e; --bg-header: #252525;
@@ -38,8 +38,8 @@
             }
         }
 
-        /* 2. Webex App Forced Dark Mode (Overrides OS if set via attribute) */
-        :host([dark-mode="true"]) {
+        /* 2. Webex App Forced Dark Mode (Matches standard "is-dark-mode" attribute) */
+        :host([is-dark-mode="true"]), :host([is-dark-mode="dark"]) {
             --bg-app: #121212; --bg-card: #1e1e1e; --bg-header: #252525;
             --bg-input: #2c2c2c; --bg-shift-row: #2a2a2a; --bg-shift-row-hover: #333;
             --bg-edit-box: #2c3e50; --bg-new-area: #222;
@@ -210,8 +210,8 @@
             this.hasChanges = {};
         }
 
-        // --- NEW: Watch for 'dark-mode' attribute ---
-        static get observedAttributes() { return ['token', 'org-id', 'data-center', 'dark-mode']; }
+        // --- OBSERVED ATTRIBUTES: Now watching 'is-dark-mode' ---
+        static get observedAttributes() { return ['token', 'org-id', 'data-center', 'is-dark-mode']; }
 
         attributeChangedCallback(name, oldValue, newValue) {
             if (name === 'token') this.ctx.token = newValue;
@@ -220,7 +220,10 @@
                 this.ctx.region = newValue;
                 this.ctx.baseUrl = this.resolveApiUrl(newValue);
             }
-            // Note: CSS selector :host([dark-mode="true"]) handles the visual switch automatically.
+            if (name === 'is-dark-mode') {
+                console.log('[SupervisorControls] Dark Mode Changed:', newValue);
+                // The CSS :host selector handles the visual switch automatically.
+            }
             
             if (this.ctx.token && this.ctx.orgId && this.ctx.baseUrl) {
                 this.updateDebugDisplay();
