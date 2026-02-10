@@ -1,10 +1,10 @@
 /* FILENAME: SupervisorControls.js
    DESCRIPTION: A Webex Contact Center gadget for Supervisors.
-   VERSION: v4.25-ScopeFix (Fixed 'this' context error)
+   VERSION: v4.26-StableButtons (Fixed Re-render Race Condition)
 */
 
 (function() {
-    const VERSION = "v4.25-ScopeFix";
+    const VERSION = "v4.26-StableButtons";
     
     const CSS_STYLES = `
         :host {
@@ -180,8 +180,9 @@
             this.editState = {}; 
             this.listEditState = {};
             this.hasChanges = {};
-            
-            // Bind methods to 'this' context
+            this.loadStatus = { vars: 'init', bh: 'init', lists: 'init' };
+
+            // FIX: Bind helper methods to ensure 'this' is always correct
             this.escapeHtml = this.escapeHtml.bind(this);
             this.formatTime = this.formatTime.bind(this);
         }
@@ -247,6 +248,7 @@
         }
 
         startLoadingProcess() {
+            // Load independently
             this.loadAndRenderVariables();
             this.loadAndRenderBusinessHours();
             this.loadAndRenderLists();
@@ -356,6 +358,7 @@
                 const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/holiday-schedules?page=0&pageSize=100`;
                 const res = await fetch(url, { headers: { 'Authorization': `Bearer ${this.ctx.token}` } });
                 
+                // Treat 404 as valid "Empty" state, not error
                 if (res.status === 403) {
                     container.innerHTML = `<div class="status-msg info">You do not have permission to view Holiday/Override lists.</div>`;
                     return;
@@ -403,7 +406,9 @@
                     this.attachListListeners(oContainer);
                 }
 
-                if(this.data.businessHours.length > 0) {
+                // FIX: Only re-render BH if we actually found lists to populate dropdowns.
+                // Prevents wiping out BH if Lists 404s.
+                if(this.data.businessHours.length > 0 && this.data.holidayLists.length > 0) {
                    this.loadAndRenderBusinessHours(); 
                 }
 
@@ -470,6 +475,7 @@
             const card = document.createElement('div');
             card.className = 'bh-card';
             
+            // Dropdown Options
             let optionsHtml = '<option value="">-- No List Selected --</option>';
             this.data.holidayLists.forEach(l => {
                 const isSelected = (bh.holidayScheduleId === l.id); 
@@ -543,6 +549,8 @@
             return card;
         }
 
+        // --- HANDLERS (Business Hours) ---
+
         attachBusinessHoursListeners(root) {
             root.querySelectorAll('.add-shift-btn').forEach(b => b.addEventListener('click', e => this.openAddShiftUI(e.currentTarget.dataset.bh)));
             root.querySelectorAll('.save-bh-btn').forEach(b => b.addEventListener('click', e => this.handleSaveBusinessHours(e.currentTarget.dataset.bh, e.currentTarget)));
@@ -554,8 +562,9 @@
         }
 
         openAddShiftUI(bhId) {
+            console.log("Opening Add Shift for", bhId);
             const container = this.shadowRoot.getElementById(`new-shift-container-${bhId}`);
-            if (!container) return;
+            if (!container) { console.error("Container not found", bhId); return; }
             container.innerHTML = this.getShiftEditHTML({ name: "New Shift", startTime: "09:00", endTime: "17:00", days: [] }, true);
             container.classList.add('active');
             this.attachShiftEditHandlers(container, bhId, -1);
@@ -598,6 +607,22 @@
                 this.hasChanges[bhId] = true;
                 this.loadAndRenderBusinessHours();
             });
+        }
+
+        getShiftEditHTML(shift, isNew) {
+            const allDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+            const safeName = this.escapeHtml(shift.name || '');
+            const delHtml = isNew ? '' : '<button class="btn btn-danger delete-shift-btn">Delete</button>';
+            // Ensure days array exists
+            const currentDays = shift.days || [];
+            const pills = allDays.map(d => `<div class="day-pill ${currentDays.includes(d)?'selected':''}" data-day="${d}">${currentDays.includes(d)?'&#10003;':''} ${d}</div>`).join('');
+            return `
+                <div class="shift-edit-box">
+                    <div class="edit-row"><div class="form-group"><span class="form-label">Name</span><input class="edit-name" value="${safeName}"></div>
+                    <div class="form-group"><span class="form-label">Time</span><div style="display:flex;gap:5px;"><input type="time" class="edit-start" value="${shift.startTime}"><input type="time" class="edit-end" value="${shift.endTime}"></div></div></div>
+                    <div class="form-group" style="margin-top:10px;"><span class="form-label">Days</span><div class="day-pills">${pills}</div></div>
+                    <div style="display:flex;justify-content:space-between;margin-top:15px;"><div>${delHtml}</div><div style="display:flex;gap:10px;"><button class="btn btn-secondary cancel-edit-btn">Cancel</button><button class="btn btn-primary confirm-edit-btn">Done</button></div></div>
+                </div>`;
         }
 
         attachListListeners(root) {
