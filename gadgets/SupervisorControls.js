@@ -1,10 +1,10 @@
 /* FILENAME: SupervisorControls.js
    DESCRIPTION: A Webex Contact Center gadget for Supervisors.
-   VERSION: v4.23-IndependentModules (Fault-Tolerant, Permission-Aware UI)
+   VERSION: v4.24-AsyncLoader (Independent, Sequential Rendering)
 */
 
 (function() {
-    const VERSION = "v4.23-IndependentModules";
+    const VERSION = "v4.24-AsyncLoader";
     
     const CSS_STYLES = `
         :host {
@@ -133,9 +133,8 @@
         .footer-version { position: fixed; bottom: 8px; left: 15px; font-size: 11px; color: var(--text-desc); pointer-events: none; }
         #toast { visibility: hidden; min-width: 300px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 16px; position: fixed; z-index: 1000; left: 50%; bottom: 30px; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; }
         #toast.show { visibility: visible; opacity: 1; bottom: 50px; }
-        .loading { color: var(--text-desc); font-style: italic; display: flex; align-items: center; gap: 8px; }
+        .loading { color: var(--text-desc); font-style: italic; display: flex; align-items: center; gap: 8px; margin: 10px 0; }
         
-        /* Status Message Styles */
         .status-msg { padding: 15px; border-radius: 6px; font-size: 0.9em; margin-bottom: 20px; }
         .status-msg.info { background: var(--bg-edit-box); color: var(--text-sub); border: 1px solid var(--border-color); }
         .status-msg.warning { background: rgba(240, 173, 78, 0.1); color: #d39e00; border: 1px solid #f0ad4e; }
@@ -147,8 +146,13 @@
       <style>${CSS_STYLES}</style>
       <div id="app">
           <div id="content">
-              <div id="variables-container"></div>
-              <div id="bh-container" style="margin-top: 30px;"></div>
+              <div id="variables-section">
+                <div class="loading">Loading Variables...</div>
+              </div>
+              
+              <div id="bh-section" style="margin-top: 30px;">
+                <div class="loading">Loading Business Hours...</div>
+              </div>
               
               <h3 class="category-header">Lists Management</h3>
               <div class="tabs-nav">
@@ -156,11 +160,8 @@
                   <button class="tab-btn" data-tab="overrides">Override Lists</button>
               </div>
               
-              <div id="tab-holidays" class="tab-content active">
-                  <div id="holidays-list-container"></div>
-              </div>
-              <div id="tab-overrides" class="tab-content">
-                  <div id="overrides-list-container"></div>
+              <div id="lists-section">
+                <div class="loading">Loading Lists...</div>
               </div>
           </div>
       </div>
@@ -176,14 +177,6 @@
             
             this.ctx = { token: null, orgId: null, region: null, baseUrl: null };
             this.data = { variables: [], businessHours: [], holidayLists: [] };
-            
-            // INDEPENDENT STATUS TRACKING
-            this.loadStatus = {
-                vars: 'init',
-                bh: 'init',
-                lists: 'init' 
-            };
-
             this.editState = {}; 
             this.listEditState = {};
             this.hasChanges = {};
@@ -204,8 +197,13 @@
                     this.shadowRoot.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                     e.target.classList.add('active');
                     const tabId = e.target.dataset.tab;
-                    const contentId = tabId === 'holidays' ? 'tab-holidays' : 'tab-overrides';
-                    this.shadowRoot.getElementById(contentId).classList.add('active');
+                    // Simply toggle visibility of containers inside the rendered list section
+                    const hCont = this.shadowRoot.getElementById('tab-holidays');
+                    const oCont = this.shadowRoot.getElementById('tab-overrides');
+                    if(hCont && oCont) {
+                        if(tabId === 'holidays') { hCont.classList.add('active'); oCont.classList.remove('active'); }
+                        else { oCont.classList.add('active'); hCont.classList.remove('active'); }
+                    }
                 });
             });
         }
@@ -224,7 +222,8 @@
                 this.setDarkTheme(isDark);
             }
             if (this.ctx.token && this.ctx.orgId && this.ctx.baseUrl) {
-                this.loadAllData();
+                // START LOADING IMMEDIATELY
+                this.startLoadingProcess();
             }
         }
 
@@ -245,46 +244,73 @@
             return map[cleanDc] || map['us1'];
         }
 
-        async loadAllData() {
-            // Trigger all loads independently. Failures in one will NOT stop the others.
-            const pVars = this.loadVariables();
-            const pBh = this.loadBusinessHours();
-            const pLists = this.loadHolidayLists();
-
-            // Wait for all to finish (regardless of success/fail) then render
-            await Promise.allSettled([pVars, pBh, pLists]);
-            
-            this.render();
+        startLoadingProcess() {
+            // FIRE AND FORGET - Do not use Promise.all. Allow each to render when ready.
+            this.loadAndRenderVariables();
+            this.loadAndRenderBusinessHours();
+            this.loadAndRenderLists();
         }
 
-        async loadVariables() {
+        // --- 1. VARIABLES ---
+        async loadAndRenderVariables() {
+            const container = this.shadowRoot.getElementById('variables-section');
             try {
                 const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/cad-variable?page=0&pageSize=100`;
                 const res = await fetch(url, { headers: { 'Authorization': `Bearer ${this.ctx.token}` } });
                 
                 if (res.status === 403 || res.status === 404) {
-                    this.loadStatus.vars = res.status === 403 ? 'forbidden' : 'not_found';
+                    container.innerHTML = `<div class="status-msg warning">You do not have permission to view Global Variables.</div>`;
                     return;
                 }
                 if (!res.ok) throw new Error(`Status ${res.status}`);
                 
                 const json = await res.json();
                 this.data.variables = (json.data || []).filter(v => v.active !== false);
-                this.loadStatus.vars = this.data.variables.length > 0 ? 'loaded' : 'empty';
                 
+                // RENDER VARIABLES
+                container.innerHTML = `<div id="variables-container"></div>`;
+                const listContainer = this.shadowRoot.getElementById('variables-container');
+                
+                const vars = [...this.data.variables].sort((a, b) => a.name.localeCompare(b.name));
+                const metrics = this.calculateLayoutMetrics(vars);
+                this.style.setProperty('--label-width', `${metrics.labelWidth}px`);
+                this.style.setProperty('--card-min-width', `${metrics.cardWidth}px`);
+
+                let currentType = '';
+                let currentWrapper = document.createElement('div');
+                currentWrapper.className = 'section-wrapper';
+
+                vars.forEach(v => {
+                    const type = (v.variableType || 'UNKNOWN').toUpperCase();
+                    if (type !== currentType) {
+                        if (currentType !== '') listContainer.appendChild(currentWrapper);
+                        currentType = type;
+                        listContainer.insertAdjacentHTML('beforeend', `<h3 class="category-header">${this.escapeHtml(currentType)} Variables</h3>`);
+                        currentWrapper = document.createElement('div');
+                        currentWrapper.className = 'section-wrapper';
+                    }
+                    currentWrapper.insertAdjacentHTML('beforeend', this.buildVariableCard(v));
+                });
+                listContainer.appendChild(currentWrapper);
+                
+                listContainer.querySelectorAll('.save-var-btn').forEach(b => 
+                    b.addEventListener('click', e => this.handleSaveVariable(e.currentTarget.dataset.id, e.currentTarget))
+                );
+
             } catch (e) {
-                console.error("Vars Load Error", e);
-                this.loadStatus.vars = 'error';
+                container.innerHTML = `<div class="status-msg warning">Unable to load Variables: ${e.message}</div>`;
             }
         }
 
-        async loadBusinessHours() {
+        // --- 2. BUSINESS HOURS ---
+        async loadAndRenderBusinessHours() {
+            const container = this.shadowRoot.getElementById('bh-section');
             try {
                 const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/business-hours?page=0&pageSize=100`;
                 const res = await fetch(url, { headers: { 'Authorization': `Bearer ${this.ctx.token}` } });
                 
                 if (res.status === 403 || res.status === 404) {
-                    this.loadStatus.bh = res.status === 403 ? 'forbidden' : 'not_found';
+                    container.innerHTML = `<div class="status-msg warning">You do not have permission to view Business Hours.</div>`;
                     return;
                 }
                 if (!res.ok) throw new Error(`Status ${res.status}`);
@@ -298,160 +324,98 @@
                     this.editState[bh.id] = JSON.parse(JSON.stringify(bh.workingHours || []));
                     this.hasChanges[bh.id] = false;
                 });
-                this.loadStatus.bh = this.data.businessHours.length > 0 ? 'loaded' : 'empty';
+
+                // RENDER BH
+                container.innerHTML = `<div id="bh-container"></div>`;
+                const listContainer = this.shadowRoot.getElementById('bh-container');
+
+                if (this.data.businessHours.length > 0) {
+                    listContainer.insertAdjacentHTML('beforeend', `<h3 class="category-header">Business Hours</h3>`);
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'section-wrapper';
+                    
+                    this.data.businessHours.forEach(bh => {
+                        const shifts = this.editState[bh.id] || [];
+                        const isDirty = this.hasChanges[bh.id];
+                        wrapper.appendChild(this.buildBusinessHoursCard(bh, shifts, isDirty));
+                    });
+                    listContainer.appendChild(wrapper);
+                } else {
+                    listContainer.innerHTML = `<div class="status-msg info">No Business Hours configured.</div>`;
+                }
+                this.attachBusinessHoursListeners(listContainer);
 
             } catch (e) {
-                console.error("BH Load Error", e);
-                this.loadStatus.bh = 'error';
+                container.innerHTML = `<div class="status-msg warning">Unable to load Business Hours: ${e.message}</div>`;
             }
         }
 
-        async loadHolidayLists() {
+        // --- 3. HOLIDAY LISTS ---
+        async loadAndRenderLists() {
+            const container = this.shadowRoot.getElementById('lists-section');
             try {
                 const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/holiday-schedules?page=0&pageSize=100`;
                 const res = await fetch(url, { headers: { 'Authorization': `Bearer ${this.ctx.token}` } });
                 
-                if (res.status === 403) { this.loadStatus.lists = 'forbidden'; return; }
-                if (res.status === 404) { this.loadStatus.lists = 'not_found'; return; }
-                
-                if (!res.ok) throw new Error(`Status ${res.status}`);
-                
-                const json = await res.json();
-                this.data.holidayLists = json.data || [];
+                if (res.status === 403) {
+                    container.innerHTML = `<div class="status-msg info">You do not have permission to view Holiday/Override lists.</div>`;
+                    return;
+                }
+                // TREAT 404 AS EMPTY LIST, NOT ERROR
+                if (res.status === 404) {
+                    this.data.holidayLists = [];
+                } else {
+                    if (!res.ok) throw new Error(`Status ${res.status}`);
+                    const json = await res.json();
+                    this.data.holidayLists = json.data || [];
+                }
                 
                 this.listEditState = {};
                 this.data.holidayLists.forEach(l => {
                     this.listEditState[l.id] = JSON.parse(JSON.stringify(l.events || []));
                     this.hasChanges[l.id] = false;
                 });
-                this.loadStatus.lists = this.data.holidayLists.length > 0 ? 'loaded' : 'empty';
+
+                // RENDER LISTS
+                container.innerHTML = `
+                    <div id="tab-holidays" class="tab-content active"><div id="holidays-list-container"></div></div>
+                    <div id="tab-overrides" class="tab-content"><div id="overrides-list-container"></div></div>
+                `;
+                
+                const hContainer = this.shadowRoot.getElementById('holidays-list-container');
+                const oContainer = this.shadowRoot.getElementById('overrides-list-container');
+
+                if (this.data.holidayLists.length === 0) {
+                    const msg = `<div class="status-msg info">No Holiday or Override lists found.</div>`;
+                    hContainer.innerHTML = msg;
+                    oContainer.innerHTML = msg;
+                } else {
+                    const hWrapper = document.createElement('div'); hWrapper.className = 'section-wrapper';
+                    const oWrapper = document.createElement('div'); oWrapper.className = 'section-wrapper';
+
+                    this.data.holidayLists.forEach(list => {
+                        const events = this.listEditState[list.id] || [];
+                        const isDirty = this.hasChanges[list.id];
+                        hWrapper.appendChild(this.buildListCard(list, events, isDirty));
+                        oWrapper.appendChild(this.buildListCard(list, events, isDirty));
+                    });
+                    hContainer.appendChild(hWrapper);
+                    oContainer.appendChild(oWrapper);
+                    
+                    this.attachListListeners(hContainer);
+                    this.attachListListeners(oContainer);
+                }
+
+                // If BH loaded first, they might need a refresh to populate dropdowns with these lists
+                // We re-render BH if needed (optional optimization)
+                if(this.data.businessHours.length > 0) {
+                   // This ensures dropdowns get populated if Lists load AFTER business hours
+                   this.loadAndRenderBusinessHours(); 
+                }
 
             } catch (e) {
-                console.error("Lists Load Error", e);
-                this.loadStatus.lists = 'error'; // We treat unexpected errors as errors
+                container.innerHTML = `<div class="status-msg warning">Unable to load Lists: ${e.message}</div>`;
             }
-        }
-
-        render() {
-            // Render each section based on its OWN status
-            this.renderVariables();
-            this.renderBusinessHours();
-            this.renderLists();
-        }
-
-        // --- RENDERERS ---
-
-        renderVariables() {
-            const container = this.shadowRoot.getElementById('variables-container');
-            if(!container) return; 
-            container.innerHTML = ''; 
-
-            if (this.loadStatus.vars === 'forbidden') {
-                container.innerHTML = `<div class="status-msg warning">You do not have permission to view Global Variables.</div>`;
-                return;
-            }
-            if (this.loadStatus.vars === 'not_found' || this.loadStatus.vars === 'empty') {
-                // Optional: Hide section entirely or show empty message
-                return; 
-            }
-            if (this.loadStatus.vars === 'error') {
-                container.innerHTML = `<div class="status-msg warning">Unable to load Global Variables.</div>`;
-                return;
-            }
-
-            const vars = [...this.data.variables].sort((a, b) => a.name.localeCompare(b.name));
-            const metrics = this.calculateLayoutMetrics(vars);
-            this.style.setProperty('--label-width', `${metrics.labelWidth}px`);
-            this.style.setProperty('--card-min-width', `${metrics.cardWidth}px`);
-
-            let currentType = '';
-            let currentWrapper = document.createElement('div');
-            currentWrapper.className = 'section-wrapper';
-
-            vars.forEach(v => {
-                const type = (v.variableType || 'UNKNOWN').toUpperCase();
-                if (type !== currentType) {
-                    if (currentType !== '') container.appendChild(currentWrapper);
-                    currentType = type;
-                    container.insertAdjacentHTML('beforeend', `<h3 class="category-header">${this.escapeHtml(currentType)} Variables</h3>`);
-                    currentWrapper = document.createElement('div');
-                    currentWrapper.className = 'section-wrapper';
-                }
-                currentWrapper.insertAdjacentHTML('beforeend', this.buildVariableCard(v));
-            });
-            container.appendChild(currentWrapper);
-
-            container.querySelectorAll('.save-var-btn').forEach(b => 
-                b.addEventListener('click', e => this.handleSaveVariable(e.currentTarget.dataset.id, e.currentTarget))
-            );
-        }
-
-        renderBusinessHours() {
-            const container = this.shadowRoot.getElementById('bh-container');
-            if(!container) return;
-            container.innerHTML = '';
-
-            if (this.loadStatus.bh === 'forbidden') {
-                container.innerHTML = `<div class="status-msg warning">You do not have permission to view Business Hours.</div>`;
-                return;
-            }
-            if (this.loadStatus.bh === 'error') {
-                container.innerHTML = `<div class="status-msg warning">Unable to load Business Hours.</div>`;
-                return;
-            }
-
-            if (this.data.businessHours.length > 0) {
-                container.insertAdjacentHTML('beforeend', `<h3 class="category-header">Business Hours</h3>`);
-                const wrapper = document.createElement('div');
-                wrapper.className = 'section-wrapper';
-                
-                this.data.businessHours.forEach(bh => {
-                    const shifts = this.editState[bh.id] || [];
-                    const isDirty = this.hasChanges[bh.id];
-                    wrapper.appendChild(this.buildBusinessHoursCard(bh, shifts, isDirty));
-                });
-                container.appendChild(wrapper);
-            }
-            this.attachBusinessHoursListeners(container);
-        }
-
-        renderLists() {
-            const hContainer = this.shadowRoot.getElementById('holidays-list-container');
-            const oContainer = this.shadowRoot.getElementById('overrides-list-container');
-            
-            hContainer.innerHTML = ''; 
-            oContainer.innerHTML = '';
-
-            // Handle Empty/Permission States specifically for Lists
-            if (this.loadStatus.lists === 'forbidden') {
-                const msg = `<div class="status-msg info">You do not have permission to view Holiday/Override lists.</div>`;
-                hContainer.innerHTML = msg;
-                oContainer.innerHTML = msg;
-                return;
-            }
-            if (this.loadStatus.lists === 'not_found' || this.loadStatus.lists === 'empty') {
-                const msg = `<div class="status-msg info">No Holiday or Override lists are assigned to your profile.</div>`;
-                hContainer.innerHTML = msg;
-                oContainer.innerHTML = msg;
-                return;
-            }
-
-            const hWrapper = document.createElement('div'); hWrapper.className = 'section-wrapper';
-            const oWrapper = document.createElement('div'); oWrapper.className = 'section-wrapper';
-
-            // Populate both tabs with all lists (User can decide which is which based on naming)
-            this.data.holidayLists.forEach(list => {
-                const events = this.listEditState[list.id] || [];
-                const isDirty = this.hasChanges[list.id];
-                hWrapper.appendChild(this.buildListCard(list, events, isDirty));
-                oWrapper.appendChild(this.buildListCard(list, events, isDirty));
-            });
-
-            hContainer.appendChild(hWrapper);
-            oContainer.appendChild(oWrapper);
-
-            this.attachListListeners(hContainer);
-            this.attachListListeners(oContainer);
         }
 
         // --- BUILDERS ---
@@ -567,7 +531,7 @@
         attachBusinessHoursListeners(root) {
             root.querySelectorAll('.add-shift-btn').forEach(b => b.addEventListener('click', e => this.openAddShiftUI(e.currentTarget.dataset.bh)));
             root.querySelectorAll('.save-bh-btn').forEach(b => b.addEventListener('click', e => this.handleSaveBusinessHours(e.currentTarget.dataset.bh, e.currentTarget)));
-            root.querySelectorAll('.bh-holiday-select').forEach(s => s.addEventListener('change', e => { this.hasChanges[e.currentTarget.dataset.bh] = true; this.renderBusinessHours(); }));
+            root.querySelectorAll('.bh-holiday-select').forEach(s => s.addEventListener('change', e => { this.hasChanges[e.currentTarget.dataset.bh] = true; this.loadAndRenderBusinessHours(); }));
             root.querySelectorAll('.shift-row').forEach(row => row.addEventListener('click', e => {
                 if(row.nextElementSibling && row.nextElementSibling.classList.contains('shift-edit-box')) return;
                 this.openEditShiftUI(e.currentTarget.dataset.bh, e.currentTarget.dataset.idx, e.currentTarget);
@@ -604,7 +568,7 @@
             if(idx === -1) editBox.querySelector('.cancel-edit-btn').addEventListener('click', () => { if(!targetElement.classList.contains('shift-edit-box')) targetElement.innerHTML = ''; targetElement.classList.remove('active'); });
 
             const delBtn = editBox.querySelector('.delete-shift-btn');
-            if(delBtn) delBtn.addEventListener('click', () => { this.editState[bhId].splice(idx, 1); this.hasChanges[bhId] = true; this.renderBusinessHours(); });
+            if(delBtn) delBtn.addEventListener('click', () => { this.editState[bhId].splice(idx, 1); this.hasChanges[bhId] = true; this.loadAndRenderBusinessHours(); });
 
             editBox.querySelector('.confirm-edit-btn').addEventListener('click', () => {
                 const name = editBox.querySelector('.edit-name').value.trim();
@@ -617,7 +581,7 @@
                 const newShift = { name, startTime: start, endTime: end, days };
                 if(idx === -1) this.editState[bhId].push(newShift); else this.editState[bhId][idx] = newShift;
                 this.hasChanges[bhId] = true;
-                this.renderBusinessHours();
+                this.loadAndRenderBusinessHours();
             });
         }
 
@@ -670,7 +634,7 @@
             if(idx === -1) editBox.querySelector('.cancel-edit-btn').addEventListener('click', () => { if(!targetElement.classList.contains('shift-edit-box')) targetElement.innerHTML = ''; targetElement.classList.remove('active'); });
 
             const delBtn = editBox.querySelector('.delete-shift-btn');
-            if(delBtn) delBtn.addEventListener('click', () => { this.listEditState[listId].splice(idx, 1); this.hasChanges[listId] = true; this.renderLists(); });
+            if(delBtn) delBtn.addEventListener('click', () => { this.listEditState[listId].splice(idx, 1); this.hasChanges[listId] = true; this.loadAndRenderLists(); });
 
             editBox.querySelector('.confirm-edit-btn').addEventListener('click', () => {
                 const name = editBox.querySelector('.edit-name').value.trim();
@@ -682,7 +646,7 @@
                 const newEvt = { name, startDate: start, endDate: end };
                 if(idx === -1) this.listEditState[listId].push(newEvt); else this.listEditState[listId][idx] = newEvt;
                 this.hasChanges[listId] = true;
-                this.renderLists();
+                this.loadAndRenderLists();
             });
         }
 
@@ -713,7 +677,7 @@
                 this.hasChanges[bhId] = false;
                 this.showNotification("Saved Business Hour", "success");
                 originalBh.holidayScheduleId = holidayId;
-                this.renderBusinessHours();
+                this.loadAndRenderBusinessHours();
             } catch (e) {
                 this.showNotification("Save Failed", "error");
                 btnElement.innerText = "Save Changes"; btnElement.disabled = false;
@@ -733,7 +697,7 @@
                 
                 this.hasChanges[listId] = false;
                 this.showNotification("Saved List", "success");
-                this.renderLists();
+                this.loadAndRenderLists();
             } catch (e) {
                 this.showNotification("Save Failed", "error");
                 btnElement.innerText = "Save List"; btnElement.disabled = false;
