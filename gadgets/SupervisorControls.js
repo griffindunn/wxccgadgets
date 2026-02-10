@@ -1,12 +1,11 @@
 /* FILENAME: SupervisorControls.js
    DESCRIPTION: A Webex Contact Center gadget for Supervisors.
-   VERSION: v4.21-TabsAndDropdowns (Safe Loading, Tabs, & BH Dropdowns)
+   VERSION: v4.22-DebugTabs (Error Visualization & Resilient Loading)
 */
 
 (function() {
-    const VERSION = "v4.21-TabsAndDropdowns";
+    const VERSION = "v4.22-DebugTabs";
     
-    // --- STYLING SECTION (CSS) ---
     const CSS_STYLES = `
         :host {
             color-scheme: light dark;
@@ -29,7 +28,6 @@
             transition: background-color 0.3s ease;
         }
 
-        /* DARK MODE OVERRIDES */
         :host(.dark-theme) {
             --bg-app: #121212; --bg-card: #1e1e1e; --bg-header: #252525;
             --bg-input: #2c2c2c; --bg-shift-row: #2a2a2a; --bg-shift-row-hover: #333;
@@ -48,7 +46,6 @@
         #content { display: block; padding-bottom: 40px; }
         .section-wrapper { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
 
-        /* --- CARDS --- */
         .var-row, .bh-card, .list-card {
             background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;
             transition: box-shadow 0.2s; flex: 0 0 auto; 
@@ -69,7 +66,6 @@
         }
         textarea.var-input { resize: both; min-width: 100px; }
 
-        /* --- BUSINESS HOURS & LISTS --- */
         .bh-card, .list-card { display: flex; flex-direction: column; margin-bottom: 20px; overflow: hidden; }
         
         .bh-header {
@@ -89,11 +85,7 @@
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
-        /* Generic Edit Areas */
-        .new-item-area {
-            padding: 0 20px; border-bottom: 1px solid var(--border-light);
-            display: none; background-color: var(--bg-new-area);
-        }
+        .new-item-area { padding: 0 20px; border-bottom: 1px solid var(--border-light); display: none; background-color: var(--bg-new-area); }
         .new-item-area.active { display: block; padding: 20px; }
 
         .bh-day-group { border-bottom: 1px solid var(--border-light); padding: 12px 20px; }
@@ -101,55 +93,36 @@
         .bh-day-name { font-size: 0.85rem; font-weight: 700; color: var(--text-sub); margin-bottom: 8px; }
         .bh-day-shifts { display: flex; flex-direction: column; gap: 6px; }
 
-        .shift-row {
-            display: grid; grid-template-columns: 1fr 1fr; padding: 8px 12px;
-            background: var(--bg-shift-row); border-radius: 4px; cursor: pointer; font-size: 0.9rem;
-        }
+        .shift-row { display: grid; grid-template-columns: 1fr 1fr; padding: 8px 12px; background: var(--bg-shift-row); border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
         .shift-row:hover { background: var(--bg-shift-row-hover); }
         .shift-row-name { color: var(--color-primary); font-weight: 600; }
         .shift-row-time { color: var(--text-desc); text-align: right; }
         .shift-empty { font-size: 0.85rem; color: #999; font-style: italic; padding-left: 12px; }
 
-        .shift-edit-box {
-            background: var(--bg-edit-box); border: 1px solid var(--border-accent);
-            border-radius: 6px; padding: 15px; margin-top: 8px; display: flex; flex-direction: column; gap: 12px;
-        }
+        .shift-edit-box { background: var(--bg-edit-box); border: 1px solid var(--border-accent); border-radius: 6px; padding: 15px; margin-top: 8px; display: flex; flex-direction: column; gap: 12px; }
         .new-item-area .shift-edit-box { margin-top: 0; background: var(--bg-card); }
         
+        .delete-confirm-view { text-align: center; padding: 20px 0; animation: fadeIn 0.2s ease-in; }
+
         .edit-row { display: flex; gap: 15px; flex-wrap: wrap; }
         .form-group { display: flex; flex-direction: column; gap: 4px; }
         .form-label { font-size: 0.7rem; font-weight: 700; color: var(--text-sub); text-transform: uppercase; }
-        .edit-name, .edit-start, .edit-end {
-            background: var(--bg-input); color: var(--text-input);
-            border: 1px solid var(--border-color); padding: 5px; border-radius: 4px;
-        }
+        .edit-name, .edit-start, .edit-end { background: var(--bg-input); color: var(--text-input); border: 1px solid var(--border-color); padding: 5px; border-radius: 4px; }
 
         .day-pills { display: flex; gap: 6px; flex-wrap: wrap; }
-        .day-pill {
-            padding: 5px 8px; border: 1px solid var(--border-color); background: var(--bg-input);
-            color: var(--text-input); border-radius: 4px; font-size: 0.75rem; cursor: pointer; user-select: none;
-        }
+        .day-pill { padding: 5px 8px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-input); border-radius: 4px; font-size: 0.75rem; cursor: pointer; user-select: none; }
         .day-pill:hover { background: var(--border-light); }
         .day-pill.selected { background: var(--color-primary); color: white; border-color: var(--color-primary); }
 
-        .bh-footer-select {
-            padding: 15px 20px; background: var(--bg-new-area); border-top: 1px solid var(--border-color);
-            display: flex; flex-direction: column; gap: 5px;
-        }
+        .bh-footer-select { padding: 15px 20px; background: var(--bg-new-area); border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 5px; }
         .bh-footer-label { font-size: 0.75rem; font-weight: 700; color: var(--text-sub); text-transform: uppercase; }
 
-        .bh-save-bar {
-            padding: 15px 20px; background: var(--bg-new-area); border-top: 1px solid var(--border-color);
-            text-align: right; display: none;
-        }
+        .bh-save-bar { padding: 15px 20px; background: var(--bg-new-area); border-top: 1px solid var(--border-color); text-align: right; display: none; }
         .bh-save-bar.visible { display: block; animation: slideUp 0.3s ease-out; }
 
         @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         
-        .btn {
-            padding: 0 16px; height: 36px; border: none; border-radius: 18px;
-            font-weight: 600; font-size: 13px; cursor: pointer; transition: 0.2s;
-        }
+        .btn { padding: 0 16px; height: 36px; border: none; border-radius: 18px; font-weight: 600; font-size: 13px; cursor: pointer; transition: 0.2s; }
         .btn-primary { background: var(--color-primary); color: white; }
         .btn-success { background: var(--color-success); color: white; }
         .btn-black { background: #222; color: white; }
@@ -158,15 +131,10 @@
         .btn-danger { background: var(--color-danger); color: white; }
 
         .footer-version { position: fixed; bottom: 8px; left: 15px; font-size: 11px; color: var(--text-desc); pointer-events: none; }
-        #toast {
-            visibility: hidden; min-width: 300px; background-color: #333; color: #fff;
-            text-align: center; border-radius: 6px; padding: 16px;
-            position: fixed; z-index: 1000; left: 50%; bottom: 30px; transform: translateX(-50%);
-            opacity: 0; transition: opacity 0.3s;
-        }
+        #toast { visibility: hidden; min-width: 300px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 16px; position: fixed; z-index: 1000; left: 50%; bottom: 30px; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; }
         #toast.show { visibility: visible; opacity: 1; bottom: 50px; }
         .loading { color: var(--text-desc); font-style: italic; display: flex; align-items: center; gap: 8px; }
-        .error-msg { color: var(--color-danger); padding: 10px; border: 1px solid var(--color-danger); border-radius: 4px; }
+        .error-box { color: var(--color-danger); border: 1px solid var(--color-danger); padding: 10px; border-radius: 6px; margin-bottom: 20px; font-size: 0.9em; background: rgba(220, 53, 69, 0.1); }
     `;
 
     // --- HTML TEMPLATE ---
@@ -174,6 +142,7 @@
     template.innerHTML = `
       <style>${CSS_STYLES}</style>
       <div id="app">
+          <div id="debug-info" style="font-size: 0.75rem; color: var(--text-desc); padding: 10px; border-bottom: 1px dashed #ccc; margin-bottom: 15px;">Initializing...</div>
           <div id="content">
               <div id="variables-container"></div>
               <div id="bh-container" style="margin-top: 30px;"></div>
@@ -220,11 +189,8 @@
             const tabs = this.shadowRoot.querySelectorAll('.tab-btn');
             tabs.forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    // Reset active states
                     this.shadowRoot.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
                     this.shadowRoot.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                    
-                    // Activate clicked
                     e.target.classList.add('active');
                     const tabId = e.target.dataset.tab;
                     const contentId = tabId === 'holidays' ? 'tab-holidays' : 'tab-overrides';
@@ -246,9 +212,18 @@
                 const isDark = (newValue === 'true' || newValue === 'dark' || newValue === true);
                 this.setDarkTheme(isDark);
             }
+            
             if (this.ctx.token && this.ctx.orgId && this.ctx.baseUrl) {
+                this.updateDebug(`Ready. Token: ${this.ctx.token.substring(0,5)}... Org: ${this.ctx.orgId}`);
                 this.loadAllData();
+            } else {
+                this.updateDebug("Waiting for attributes...");
             }
+        }
+
+        updateDebug(msg) {
+            const el = this.shadowRoot.getElementById('debug-info');
+            if(el) el.innerText = msg;
         }
 
         setDarkTheme(enable) {
@@ -270,61 +245,76 @@
 
         // --- SAFE DATA LOADING ---
         async loadAllData() {
-            const contentDiv = this.shadowRoot.getElementById('content');
+            // Independent promises so one failure doesn't kill others
+            const pVars = this.loadVariables();
+            const pBh = this.loadBusinessHours();
+            const pLists = this.loadHolidayLists();
+
+            await Promise.allSettled([pVars, pBh, pLists]); // Wait for all, ignore fails
             
-            // Independent promises so one failure doesn't kill everything
-            const pVars = this.loadVariables().catch(e => { console.error("Vars Fail", e); return "FAIL"; });
-            const pBh = this.loadBusinessHours().catch(e => { console.error("BH Fail", e); return "FAIL"; });
-            const pLists = this.loadHolidayLists().catch(e => { console.error("Lists Fail", e); return "FAIL"; });
-
-            await Promise.all([pVars, pBh, pLists]);
-
-            // Render whatever succeeded
             this.render();
         }
 
         async loadVariables() {
-            const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/cad-variable?page=0&pageSize=100`;
-            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${this.ctx.token}` } });
-            if (!res.ok) throw new Error("API Error");
-            const json = await res.json();
-            this.data.variables = (json.data || []).filter(v => v.active !== false);
+            try {
+                const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/cad-variable?page=0&pageSize=100`;
+                const res = await fetch(url, { headers: { 'Authorization': `Bearer ${this.ctx.token}` } });
+                if (!res.ok) throw new Error(`Status ${res.status}`);
+                const json = await res.json();
+                this.data.variables = (json.data || []).filter(v => v.active !== false);
+            } catch (e) {
+                console.error("Vars Load Error", e);
+                this.shadowRoot.getElementById('variables-container').innerHTML = `<div class="error-box">Error loading Variables: ${e.message}</div>`;
+            }
         }
 
         async loadBusinessHours() {
-            const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/business-hours?page=0&pageSize=100`;
-            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${this.ctx.token}` } });
-            if (!res.ok) throw new Error("API Error");
-            const json = await res.json();
-            this.data.businessHours = json.data || [];
-            
-            this.editState = {};
-            this.hasChanges = {};
-            this.data.businessHours.forEach(bh => {
-                this.editState[bh.id] = JSON.parse(JSON.stringify(bh.workingHours || []));
-                this.hasChanges[bh.id] = false;
-            });
+            try {
+                const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/business-hours?page=0&pageSize=100`;
+                const res = await fetch(url, { headers: { 'Authorization': `Bearer ${this.ctx.token}` } });
+                if (!res.ok) throw new Error(`Status ${res.status}`);
+                const json = await res.json();
+                this.data.businessHours = json.data || [];
+                
+                this.editState = {};
+                this.hasChanges = {};
+                this.data.businessHours.forEach(bh => {
+                    this.editState[bh.id] = JSON.parse(JSON.stringify(bh.workingHours || []));
+                    this.hasChanges[bh.id] = false;
+                });
+            } catch (e) {
+                console.error("BH Load Error", e);
+                this.shadowRoot.getElementById('bh-container').innerHTML = `<div class="error-box">Error loading Business Hours: ${e.message}</div>`;
+            }
         }
 
         async loadHolidayLists() {
-            // Using generic holiday-schedules endpoint. If this fails, the lists tab will show error.
-            const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/holiday-schedules?page=0&pageSize=100`;
-            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${this.ctx.token}` } });
-            if (!res.ok) throw new Error("API Error");
-            const json = await res.json();
-            this.data.holidayLists = json.data || [];
-            
-            this.listEditState = {};
-            this.data.holidayLists.forEach(l => {
-                this.listEditState[l.id] = JSON.parse(JSON.stringify(l.events || []));
-                this.hasChanges[l.id] = false;
-            });
+            try {
+                const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/holiday-schedules?page=0&pageSize=100`;
+                const res = await fetch(url, { headers: { 'Authorization': `Bearer ${this.ctx.token}` } });
+                if (!res.ok) throw new Error(`Status ${res.status}`);
+                const json = await res.json();
+                this.data.holidayLists = json.data || [];
+                
+                this.listEditState = {};
+                this.data.holidayLists.forEach(l => {
+                    this.listEditState[l.id] = JSON.parse(JSON.stringify(l.events || []));
+                    this.hasChanges[l.id] = false;
+                });
+            } catch (e) {
+                console.error("Lists Load Error", e);
+                // Don't kill the UI, just mark lists as empty so the renderer shows the empty state
+                this.data.holidayLists = [];
+                const msg = `<div class="error-box">Could not load Holiday Lists (${e.message}). Ensure you have permission.</div>`;
+                this.shadowRoot.getElementById('holidays-list-container').innerHTML = msg;
+                this.shadowRoot.getElementById('overrides-list-container').innerHTML = msg;
+            }
         }
 
         render() {
-            try { this.renderVariables(); } catch (e) {}
-            try { this.renderBusinessHours(); } catch (e) {}
-            try { this.renderLists(); } catch (e) {}
+            if (this.data.variables.length > 0) this.renderVariables();
+            if (this.data.businessHours.length > 0) this.renderBusinessHours();
+            if (this.data.holidayLists.length > 0) this.renderLists();
         }
 
         // --- RENDERERS ---
@@ -333,8 +323,6 @@
             const container = this.shadowRoot.getElementById('variables-container');
             if(!container) return; 
             container.innerHTML = ''; 
-
-            if (this.data.variables.length === 0) return; // Silent return if empty
 
             const vars = [...this.data.variables].sort((a, b) => a.name.localeCompare(b.name));
             const metrics = this.calculateLayoutMetrics(vars);
@@ -390,32 +378,20 @@
             hContainer.innerHTML = ''; 
             oContainer.innerHTML = '';
 
-            if (!this.data.holidayLists || this.data.holidayLists.length === 0) {
-                hContainer.innerHTML = '<div class="shift-empty">No lists found.</div>';
-                oContainer.innerHTML = '<div class="shift-empty">No lists found.</div>';
-                return;
-            }
-
             const hWrapper = document.createElement('div'); hWrapper.className = 'section-wrapper';
             const oWrapper = document.createElement('div'); oWrapper.className = 'section-wrapper';
 
             this.data.holidayLists.forEach(list => {
                 const events = this.listEditState[list.id] || [];
                 const isDirty = this.hasChanges[list.id];
-                const card = this.buildListCard(list, events, isDirty);
-                
-                // Naive sort: If name contains "override", put in overrides tab, else holidays
-                if (list.name.toLowerCase().includes('override')) {
-                    oWrapper.appendChild(card);
-                } else {
-                    hWrapper.appendChild(card);
-                }
+                // For now, add to BOTH tabs so user can see them everywhere
+                hWrapper.appendChild(this.buildListCard(list, events, isDirty));
+                oWrapper.appendChild(this.buildListCard(list, events, isDirty));
             });
 
             hContainer.appendChild(hWrapper);
             oContainer.appendChild(oWrapper);
 
-            // Attach listeners to both containers
             this.attachListListeners(hContainer);
             this.attachListListeners(oContainer);
         }
@@ -453,14 +429,12 @@
             const card = document.createElement('div');
             card.className = 'bh-card';
             
-            // Dropdown Options
             let optionsHtml = '<option value="">-- No List Selected --</option>';
             this.data.holidayLists.forEach(l => {
                 const isSelected = (bh.holidayScheduleId === l.id); 
                 optionsHtml += `<option value="${l.id}" ${isSelected ? 'selected' : ''}>${this.escapeHtml(l.name)}</option>`;
             });
 
-            // Shifts
             const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
             const shortDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
             let daysHtml = '';
@@ -528,28 +502,16 @@
             return card;
         }
 
-        // --- HANDLERS (Business Hours) ---
+        // --- HANDLERS ---
 
         attachBusinessHoursListeners(root) {
-            root.querySelectorAll('.add-shift-btn').forEach(b => 
-                b.addEventListener('click', e => this.openAddShiftUI(e.currentTarget.dataset.bh))
-            );
-            root.querySelectorAll('.save-bh-btn').forEach(b => 
-                b.addEventListener('click', e => this.handleSaveBusinessHours(e.currentTarget.dataset.bh, e.currentTarget))
-            );
-            root.querySelectorAll('.bh-holiday-select').forEach(s => {
-                s.addEventListener('change', e => {
-                    const bhId = e.currentTarget.dataset.bh;
-                    this.hasChanges[bhId] = true;
-                    this.renderBusinessHours();
-                });
-            });
-            root.querySelectorAll('.shift-row').forEach(row => {
-                row.addEventListener('click', e => {
-                    if(row.nextElementSibling && row.nextElementSibling.classList.contains('shift-edit-box')) return;
-                    this.openEditShiftUI(e.currentTarget.dataset.bh, e.currentTarget.dataset.idx, e.currentTarget);
-                });
-            });
+            root.querySelectorAll('.add-shift-btn').forEach(b => b.addEventListener('click', e => this.openAddShiftUI(e.currentTarget.dataset.bh)));
+            root.querySelectorAll('.save-bh-btn').forEach(b => b.addEventListener('click', e => this.handleSaveBusinessHours(e.currentTarget.dataset.bh, e.currentTarget)));
+            root.querySelectorAll('.bh-holiday-select').forEach(s => s.addEventListener('change', e => { this.hasChanges[e.currentTarget.dataset.bh] = true; this.renderBusinessHours(); }));
+            root.querySelectorAll('.shift-row').forEach(row => row.addEventListener('click', e => {
+                if(row.nextElementSibling && row.nextElementSibling.classList.contains('shift-edit-box')) return;
+                this.openEditShiftUI(e.currentTarget.dataset.bh, e.currentTarget.dataset.idx, e.currentTarget);
+            }));
         }
 
         openAddShiftUI(bhId) {
@@ -613,21 +575,13 @@
                 </div>`;
         }
 
-        // --- HANDLERS (Lists) ---
-
         attachListListeners(root) {
-            root.querySelectorAll('.add-date-btn').forEach(b => 
-                b.addEventListener('click', e => this.openAddDateUI(e.currentTarget.dataset.list))
-            );
-            root.querySelectorAll('.save-list-btn').forEach(b => 
-                b.addEventListener('click', e => this.handleSaveList(e.currentTarget.dataset.list, e.currentTarget))
-            );
-            root.querySelectorAll('.shift-row').forEach(row => {
-                row.addEventListener('click', e => {
-                    if(row.nextElementSibling && row.nextElementSibling.classList.contains('shift-edit-box')) return;
-                    this.openEditDateUI(e.currentTarget.dataset.list, e.currentTarget.dataset.idx, e.currentTarget);
-                });
-            });
+            root.querySelectorAll('.add-date-btn').forEach(b => b.addEventListener('click', e => this.openAddDateUI(e.currentTarget.dataset.list)));
+            root.querySelectorAll('.save-list-btn').forEach(b => b.addEventListener('click', e => this.handleSaveList(e.currentTarget.dataset.list, e.currentTarget)));
+            root.querySelectorAll('.shift-row').forEach(row => row.addEventListener('click', e => {
+                if(row.nextElementSibling && row.nextElementSibling.classList.contains('shift-edit-box')) return;
+                this.openEditDateUI(e.currentTarget.dataset.list, e.currentTarget.dataset.idx, e.currentTarget);
+            }));
         }
 
         openAddDateUI(listId) {
@@ -683,8 +637,6 @@
                 </div>`;
         }
 
-        // --- SAVE HANDLERS ---
-
         async handleSaveBusinessHours(bhId, btnElement) {
             btnElement.innerText = "Saving..."; btnElement.disabled = true;
             try {
@@ -728,7 +680,6 @@
             }
         }
 
-        // --- UTILS ---
         calculateLayoutMetrics(vars) { 
             try {
                 if(!vars.length) return {labelWidth:150, cardWidth:450};
