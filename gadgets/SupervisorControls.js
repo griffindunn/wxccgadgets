@@ -1,10 +1,10 @@
 /* FILENAME: SupervisorControls.js
    DESCRIPTION: A Webex Contact Center gadget for Supervisors.
-   VERSION: v4.11-Standardized (Matches Webex "is-dark-mode" convention)
+   VERSION: v4.12-ForceDark (Includes Manual Theme Toggle & Startup Check)
 */
 
 (function() {
-    const VERSION = "v4.11-Standardized";
+    const VERSION = "v4.12-ForceDark";
     
     // --- STYLING SECTION (CSS) ---
     const CSS_STYLES = `
@@ -18,28 +18,18 @@
             --color-primary: #00bceb; --color-primary-hover: #00a0c6;
             --color-success: #2fb16c; --color-danger: #dc3545;
 
-            /* DYNAMIC VARIABLES (Calculated by JS on load) */
+            /* DYNAMIC VARIABLES */
             --label-width: 180px;      
             --card-min-width: 450px;   
 
             display: block; font-family: "CiscoSans", "Helvetica Neue", Helvetica, Arial, sans-serif;
             background-color: var(--bg-app); color: var(--text-main);
             height: 100%; overflow-y: auto; padding: 20px; box-sizing: border-box;
+            transition: background-color 0.3s ease;
         }
 
-        /* 1. OS Preference Fallback */
-        @media (prefers-color-scheme: dark) {
-            :host {
-                --bg-app: #121212; --bg-card: #1e1e1e; --bg-header: #252525;
-                --bg-input: #2c2c2c; --bg-shift-row: #2a2a2a; --bg-shift-row-hover: #333;
-                --bg-edit-box: #2c3e50; --bg-new-area: #222;
-                --text-main: #e0e0e0; --text-sub: #ccc; --text-desc: #aaa; --text-input: #fff;
-                --border-color: #444; --border-light: #333;
-            }
-        }
-
-        /* 2. Webex App Forced Dark Mode (Matches standard "is-dark-mode" attribute) */
-        :host([is-dark-mode="true"]), :host([is-dark-mode="dark"]) {
+        /* DARK MODE OVERRIDES (Applied via class 'dark-theme') */
+        :host(.dark-theme) {
             --bg-app: #121212; --bg-card: #1e1e1e; --bg-header: #252525;
             --bg-input: #2c2c2c; --bg-shift-row: #2a2a2a; --bg-shift-row-hover: #333;
             --bg-edit-box: #2c3e50; --bg-new-area: #222;
@@ -47,8 +37,18 @@
             --border-color: #444; --border-light: #333;
         }
 
-        h2 { color: var(--color-primary); margin: 0 0 25px; font-weight: 300; }
+        /* HEADER LAYOUT */
+        .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        h2 { color: var(--color-primary); margin: 0; font-weight: 300; }
         
+        /* THEME TOGGLE BUTTON */
+        .theme-btn {
+            background: transparent; border: 1px solid var(--border-color);
+            color: var(--text-main); padding: 5px 12px; border-radius: 4px;
+            cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 6px;
+        }
+        .theme-btn:hover { background: var(--border-light); }
+
         h3.category-header {
             width: 100%; margin: 30px 0 15px; font-size: 0.8rem; font-weight: 700;
             text-transform: uppercase; color: var(--text-sub);
@@ -187,8 +187,14 @@
     template.innerHTML = `
       <style>${CSS_STYLES}</style>
       <div id="app">
-          <h2>Supervisor Controls</h2>
-          <div id="debug-info" style="font-size: 0.8em; color: var(--text-desc); margin-bottom: 10px; display: none;"></div>
+          <div class="header-row">
+              <h2>Supervisor Controls</h2>
+              <button id="theme-toggle" class="theme-btn">
+                  <span>Theme</span>
+                  <span id="theme-icon">◐</span>
+              </button>
+          </div>
+          <div id="debug-info" style="font-size: 0.8em; color: var(--text-desc); margin-bottom: 10px;">Waiting for connection...</div>
           <div id="content">
               <div id="variables-container"></div>
               <div id="bh-container" style="margin-top: 30px;"></div>
@@ -208,9 +214,27 @@
             this.data = { variables: [], businessHours: [] };
             this.editState = {}; 
             this.hasChanges = {};
+            this.manualTheme = false; // Track manual override
         }
 
-        // --- OBSERVED ATTRIBUTES: Now watching 'is-dark-mode' ---
+        // --- NEW: STARTUP CHECK ---
+        connectedCallback() {
+            // Check if dark mode is already set by local storage or attribute
+            const savedTheme = localStorage.getItem('supervisor-gadget-theme');
+            if(savedTheme === 'dark') {
+                this.setDarkTheme(true);
+            } else if (this.hasAttribute('is-dark-mode') && this.getAttribute('is-dark-mode') === 'true') {
+                this.setDarkTheme(true);
+            }
+
+            // Bind manual toggle
+            this.shadowRoot.getElementById('theme-toggle').addEventListener('click', () => {
+                const isDark = this.shadowRoot.host.classList.contains('dark-theme');
+                this.setDarkTheme(!isDark);
+                localStorage.setItem('supervisor-gadget-theme', !isDark ? 'dark' : 'light');
+            });
+        }
+
         static get observedAttributes() { return ['token', 'org-id', 'data-center', 'is-dark-mode']; }
 
         attributeChangedCallback(name, oldValue, newValue) {
@@ -220,14 +244,27 @@
                 this.ctx.region = newValue;
                 this.ctx.baseUrl = this.resolveApiUrl(newValue);
             }
+            // Sync with Webex
             if (name === 'is-dark-mode') {
-                console.log('[SupervisorControls] Dark Mode Changed:', newValue);
-                // The CSS :host selector handles the visual switch automatically.
+                this.updateDebugDisplay(`Webex Mode: ${newValue}`);
+                if (!localStorage.getItem('supervisor-gadget-theme')) {
+                    this.setDarkTheme(newValue === 'true' || newValue === 'dark');
+                }
             }
             
             if (this.ctx.token && this.ctx.orgId && this.ctx.baseUrl) {
-                this.updateDebugDisplay();
+                this.updateDebugDisplay(`Connected: ${this.ctx.orgId}`);
                 this.loadAllData();
+            }
+        }
+
+        setDarkTheme(enable) {
+            if (enable) {
+                this.shadowRoot.host.classList.add('dark-theme');
+                this.shadowRoot.getElementById('theme-icon').innerText = '☾';
+            } else {
+                this.shadowRoot.host.classList.remove('dark-theme');
+                this.shadowRoot.getElementById('theme-icon').innerText = '☀';
             }
         }
 
@@ -243,9 +280,9 @@
             return map[cleanDc] || map['us1'];
         }
 
-        updateDebugDisplay() {
+        updateDebugDisplay(msg) {
             const debugEl = this.shadowRoot.getElementById('debug-info');
-            debugEl.innerText = `Org: ${this.ctx.orgId} | API: ${this.ctx.baseUrl}`;
+            debugEl.innerText = msg;
         }
 
         async loadAllData() {
