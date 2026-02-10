@@ -1,10 +1,10 @@
 /* FILENAME: SupervisorControls.js
    DESCRIPTION: A Webex Contact Center gadget for Supervisors.
-   VERSION: v4.8-Resizing (Fixed Alignment + Horizontal Expansion Support)
+   VERSION: v4.9-AutoAlign (Dynamic Width Calculation for Perfect Alignment)
 */
 
 (function() {
-    const VERSION = "v4.8-Resizing";
+    const VERSION = "v4.9-AutoAlign";
     
     // --- STYLING SECTION (CSS) ---
     const CSS_STYLES = `
@@ -17,6 +17,10 @@
             --border-color: #dcdcdc; --border-light: #eee; --border-accent: #00bceb;
             --color-primary: #00bceb; --color-primary-hover: #00a0c6;
             --color-success: #2fb16c; --color-danger: #dc3545;
+
+            /* DYNAMIC VARIABLES (Calculated by JS on load) */
+            --label-width: 180px;      /* Default, will expand for long names */
+            --card-min-width: 450px;   /* Default, will expand to match widest card */
 
             display: block; font-family: "CiscoSans", "Helvetica Neue", Helvetica, Arial, sans-serif;
             background-color: var(--bg-app); color: var(--text-main);
@@ -49,17 +53,20 @@
             background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;
             padding: 16px; display: flex; align-items: flex-start; transition: box-shadow 0.2s;
             
-            /* FIX v4.8: Use min-width instead of fixed basis. 
-               This keeps alignment at 450px but allows expansion (auto) if user drags. */
-            flex: 0 0 auto;
-            min-width: 450px;
-            max-width: 100%; /* Prevent overflowing the viewport */
+            /* DYNAMIC SIZING: 
+               1. Grow is 0 (don't stretch wildly).
+               2. Shrink is 0 (don't squash).
+               3. Base is auto (respect content).
+               4. Min-width is calculated to ensure ALL cards are as wide as the widest one. */
+            flex: 0 0 auto; 
+            min-width: var(--card-min-width); 
+            max-width: 100%; 
         }
         .var-row:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
         
         .var-info { 
-            /* Fixed label width ensures vertical alignment of inputs */
-            flex: 0 0 180px; 
+            /* Label width is calculated to fit the longest name perfectly */
+            flex: 0 0 var(--label-width); 
             margin-right: 20px; margin-top: 8px; 
             overflow-wrap: break-word; 
         }
@@ -295,6 +302,13 @@
                 return a.name.localeCompare(b.name);
             });
 
+            // --- CALCULATE DYNAMIC WIDTHS ---
+            // This logic measures the longest variable name (likely Global_FeedbackSurveyOptIn)
+            // and sets the CSS variables so ALL cards match this width initially.
+            const metrics = this.calculateLayoutMetrics(vars);
+            this.style.setProperty('--label-width', `${metrics.labelWidth}px`);
+            this.style.setProperty('--card-min-width', `${metrics.cardWidth}px`);
+
             let currentType = '';
             let currentWrapper = document.createElement('div');
             currentWrapper.className = 'section-wrapper';
@@ -315,6 +329,36 @@
             container.querySelectorAll('.save-var-btn').forEach(b => 
                 b.addEventListener('click', e => this.handleSaveVariable(e.target.dataset.id, e.target))
             );
+        }
+
+        // Helper: Calculate ideal widths based on content
+        calculateLayoutMetrics(vars) {
+            if (!vars || vars.length === 0) return { labelWidth: 150, cardWidth: 450 };
+            
+            // Create a temp element to measure text
+            const span = document.createElement('span');
+            span.style.visibility = 'hidden';
+            span.style.position = 'absolute';
+            span.style.fontFamily = '"CiscoSans", "Helvetica Neue", Helvetica, Arial, sans-serif';
+            span.style.fontWeight = '600';
+            span.style.fontSize = '0.95rem';
+            document.body.appendChild(span);
+
+            let maxTextWidth = 100;
+            vars.forEach(v => {
+                span.innerText = v.name;
+                const w = span.offsetWidth;
+                if(w > maxTextWidth) maxTextWidth = w;
+            });
+            document.body.removeChild(span);
+
+            // Logic:
+            // Label Width = Text + 20px padding
+            // Card Width = Label + Input (250px) + Button (70px) + Gaps (40px)
+            const labelWidth = maxTextWidth + 20;
+            const cardWidth = labelWidth + 250 + 70 + 40; 
+            
+            return { labelWidth, cardWidth };
         }
 
         renderBusinessHours() {
@@ -541,49 +585,6 @@
                 this.hasChanges[bhId] = true;
                 this.renderBusinessHours();
             });
-        }
-
-        getShiftEditHTML(shift, isNew) {
-            const allDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-            const safeName = this.escapeHtml(shift.name || '');
-            const deleteBtnHtml = isNew ? '<div></div>' : '<button class="btn btn-danger delete-shift-btn">Delete Shift</button>';
-
-            return `
-                <div class="shift-edit-box">
-                    <div class="edit-normal-view">
-                        <div class="edit-row">
-                            <div class="form-group">
-                                <span class="form-label">Name</span>
-                                <input type="text" class="edit-name" value="${safeName}" style="width:180px;">
-                            </div>
-                            <div class="form-group">
-                                <span class="form-label">Time Duration</span>
-                                <div style="display:flex;align-items:center;gap:5px;">
-                                    <input type="time" class="edit-start" value="${shift.startTime}">
-                                    <span>to</span>
-                                    <input type="time" class="edit-end" value="${shift.endTime}">
-                                </div>
-                            </div>
-                        </div>
-                        <div class="form-group" style="margin-top: 10px;">
-                            <span class="form-label">Days Active</span>
-                            <div class="day-pills">
-                                ${allDays.map(d => `
-                                    <div class="day-pill ${shift.days.includes(d) ? 'selected' : ''}" data-day="${d}">
-                                        ${shift.days.includes(d) ? '&#10003;' : ''} ${d}
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-top:15px; border-top: 1px solid var(--border-light); padding-top: 10px;">
-                            ${deleteBtnHtml}
-                            <div style="display:flex; gap:10px;">
-                                <button class="btn btn-secondary cancel-edit-btn">Cancel</button>
-                                <button class="btn btn-primary confirm-edit-btn">Done</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>`;
         }
 
         validateShift(name, start, end, days) {
