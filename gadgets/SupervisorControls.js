@@ -1,6 +1,6 @@
 /* FILENAME: SupervisorControls.js
    DESCRIPTION: A Webex Contact Center gadget for Supervisors.
-   VERSION: v4.16-FinalFixed (Restored Event Listeners)
+   VERSION: v4.16-FinalFixed (Restored Event Listeners & Robust Click Handling)
 */
 
 (function() {
@@ -197,7 +197,7 @@
         }
 
         connectedCallback() {
-            // Check if attribute already exists on load (Rare race condition, but good safety)
+            // Check if attribute already exists on load
             if (this.getAttribute('is-dark-mode') === 'true' || this.getAttribute('dark-mode') === 'true') {
                 this.setDarkTheme(true);
             }
@@ -329,8 +329,9 @@
             });
             container.appendChild(currentWrapper);
 
+            // Robust click handling
             container.querySelectorAll('.save-var-btn').forEach(b => 
-                b.addEventListener('click', e => this.handleSaveVariable(e.target.dataset.id, e.target))
+                b.addEventListener('click', e => this.handleSaveVariable(e.currentTarget.dataset.id, e.currentTarget))
             );
         }
 
@@ -376,7 +377,7 @@
                 });
                 container.appendChild(wrapper);
             }
-            // FIX: Restore Event Listeners so buttons work
+            // CRITICAL FIX: Restore Event Listeners so buttons work!
             this.attachBusinessHoursListeners(container);
         }
 
@@ -467,8 +468,13 @@
         }
 
         attachBusinessHoursListeners(root) {
-            root.querySelectorAll('.add-shift-btn').forEach(b => b.addEventListener('click', e => this.openAddShiftUI(e.target.dataset.bh)));
-            root.querySelectorAll('.save-bh-btn').forEach(b => b.addEventListener('click', e => this.handleSaveBusinessHours(e.target.dataset.bh, e.target)));
+            // FIX: Use currentTarget to ensure we catch the button click specifically
+            root.querySelectorAll('.add-shift-btn').forEach(b => 
+                b.addEventListener('click', e => this.openAddShiftUI(e.currentTarget.dataset.bh))
+            );
+            root.querySelectorAll('.save-bh-btn').forEach(b => 
+                b.addEventListener('click', e => this.handleSaveBusinessHours(e.currentTarget.dataset.bh, e.currentTarget))
+            );
             root.querySelectorAll('.shift-row').forEach(row => {
                 row.addEventListener('click', e => {
                     if(row.nextElementSibling && row.nextElementSibling.classList.contains('shift-edit-box')) return;
