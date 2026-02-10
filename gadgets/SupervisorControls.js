@@ -1,10 +1,10 @@
 /* FILENAME: SupervisorControls.js
    DESCRIPTION: A Webex Contact Center gadget for Supervisors.
-   VERSION: v4.22-DebugTabs (Error Visualization & Resilient Loading)
+   VERSION: v4.23-IndependentModules (Fault-Tolerant, Permission-Aware UI)
 */
 
 (function() {
-    const VERSION = "v4.22-DebugTabs";
+    const VERSION = "v4.23-IndependentModules";
     
     const CSS_STYLES = `
         :host {
@@ -134,7 +134,11 @@
         #toast { visibility: hidden; min-width: 300px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 16px; position: fixed; z-index: 1000; left: 50%; bottom: 30px; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; }
         #toast.show { visibility: visible; opacity: 1; bottom: 50px; }
         .loading { color: var(--text-desc); font-style: italic; display: flex; align-items: center; gap: 8px; }
-        .error-box { color: var(--color-danger); border: 1px solid var(--color-danger); padding: 10px; border-radius: 6px; margin-bottom: 20px; font-size: 0.9em; background: rgba(220, 53, 69, 0.1); }
+        
+        /* Status Message Styles */
+        .status-msg { padding: 15px; border-radius: 6px; font-size: 0.9em; margin-bottom: 20px; }
+        .status-msg.info { background: var(--bg-edit-box); color: var(--text-sub); border: 1px solid var(--border-color); }
+        .status-msg.warning { background: rgba(240, 173, 78, 0.1); color: #d39e00; border: 1px solid #f0ad4e; }
     `;
 
     // --- HTML TEMPLATE ---
@@ -142,7 +146,6 @@
     template.innerHTML = `
       <style>${CSS_STYLES}</style>
       <div id="app">
-          <div id="debug-info" style="font-size: 0.75rem; color: var(--text-desc); padding: 10px; border-bottom: 1px dashed #ccc; margin-bottom: 15px;">Initializing...</div>
           <div id="content">
               <div id="variables-container"></div>
               <div id="bh-container" style="margin-top: 30px;"></div>
@@ -173,6 +176,14 @@
             
             this.ctx = { token: null, orgId: null, region: null, baseUrl: null };
             this.data = { variables: [], businessHours: [], holidayLists: [] };
+            
+            // INDEPENDENT STATUS TRACKING
+            this.loadStatus = {
+                vars: 'init',
+                bh: 'init',
+                lists: 'init' 
+            };
+
             this.editState = {}; 
             this.listEditState = {};
             this.hasChanges = {};
@@ -212,18 +223,9 @@
                 const isDark = (newValue === 'true' || newValue === 'dark' || newValue === true);
                 this.setDarkTheme(isDark);
             }
-            
             if (this.ctx.token && this.ctx.orgId && this.ctx.baseUrl) {
-                this.updateDebug(`Ready. Token: ${this.ctx.token.substring(0,5)}... Org: ${this.ctx.orgId}`);
                 this.loadAllData();
-            } else {
-                this.updateDebug("Waiting for attributes...");
             }
-        }
-
-        updateDebug(msg) {
-            const el = this.shadowRoot.getElementById('debug-info');
-            if(el) el.innerText = msg;
         }
 
         setDarkTheme(enable) {
@@ -243,14 +245,14 @@
             return map[cleanDc] || map['us1'];
         }
 
-        // --- SAFE DATA LOADING ---
         async loadAllData() {
-            // Independent promises so one failure doesn't kill others
+            // Trigger all loads independently. Failures in one will NOT stop the others.
             const pVars = this.loadVariables();
             const pBh = this.loadBusinessHours();
             const pLists = this.loadHolidayLists();
 
-            await Promise.allSettled([pVars, pBh, pLists]); // Wait for all, ignore fails
+            // Wait for all to finish (regardless of success/fail) then render
+            await Promise.allSettled([pVars, pBh, pLists]);
             
             this.render();
         }
@@ -259,12 +261,20 @@
             try {
                 const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/cad-variable?page=0&pageSize=100`;
                 const res = await fetch(url, { headers: { 'Authorization': `Bearer ${this.ctx.token}` } });
+                
+                if (res.status === 403 || res.status === 404) {
+                    this.loadStatus.vars = res.status === 403 ? 'forbidden' : 'not_found';
+                    return;
+                }
                 if (!res.ok) throw new Error(`Status ${res.status}`);
+                
                 const json = await res.json();
                 this.data.variables = (json.data || []).filter(v => v.active !== false);
+                this.loadStatus.vars = this.data.variables.length > 0 ? 'loaded' : 'empty';
+                
             } catch (e) {
                 console.error("Vars Load Error", e);
-                this.shadowRoot.getElementById('variables-container').innerHTML = `<div class="error-box">Error loading Variables: ${e.message}</div>`;
+                this.loadStatus.vars = 'error';
             }
         }
 
@@ -272,7 +282,13 @@
             try {
                 const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/business-hours?page=0&pageSize=100`;
                 const res = await fetch(url, { headers: { 'Authorization': `Bearer ${this.ctx.token}` } });
+                
+                if (res.status === 403 || res.status === 404) {
+                    this.loadStatus.bh = res.status === 403 ? 'forbidden' : 'not_found';
+                    return;
+                }
                 if (!res.ok) throw new Error(`Status ${res.status}`);
+                
                 const json = await res.json();
                 this.data.businessHours = json.data || [];
                 
@@ -282,9 +298,11 @@
                     this.editState[bh.id] = JSON.parse(JSON.stringify(bh.workingHours || []));
                     this.hasChanges[bh.id] = false;
                 });
+                this.loadStatus.bh = this.data.businessHours.length > 0 ? 'loaded' : 'empty';
+
             } catch (e) {
                 console.error("BH Load Error", e);
-                this.shadowRoot.getElementById('bh-container').innerHTML = `<div class="error-box">Error loading Business Hours: ${e.message}</div>`;
+                this.loadStatus.bh = 'error';
             }
         }
 
@@ -292,7 +310,12 @@
             try {
                 const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/holiday-schedules?page=0&pageSize=100`;
                 const res = await fetch(url, { headers: { 'Authorization': `Bearer ${this.ctx.token}` } });
+                
+                if (res.status === 403) { this.loadStatus.lists = 'forbidden'; return; }
+                if (res.status === 404) { this.loadStatus.lists = 'not_found'; return; }
+                
                 if (!res.ok) throw new Error(`Status ${res.status}`);
+                
                 const json = await res.json();
                 this.data.holidayLists = json.data || [];
                 
@@ -301,20 +324,19 @@
                     this.listEditState[l.id] = JSON.parse(JSON.stringify(l.events || []));
                     this.hasChanges[l.id] = false;
                 });
+                this.loadStatus.lists = this.data.holidayLists.length > 0 ? 'loaded' : 'empty';
+
             } catch (e) {
                 console.error("Lists Load Error", e);
-                // Don't kill the UI, just mark lists as empty so the renderer shows the empty state
-                this.data.holidayLists = [];
-                const msg = `<div class="error-box">Could not load Holiday Lists (${e.message}). Ensure you have permission.</div>`;
-                this.shadowRoot.getElementById('holidays-list-container').innerHTML = msg;
-                this.shadowRoot.getElementById('overrides-list-container').innerHTML = msg;
+                this.loadStatus.lists = 'error'; // We treat unexpected errors as errors
             }
         }
 
         render() {
-            if (this.data.variables.length > 0) this.renderVariables();
-            if (this.data.businessHours.length > 0) this.renderBusinessHours();
-            if (this.data.holidayLists.length > 0) this.renderLists();
+            // Render each section based on its OWN status
+            this.renderVariables();
+            this.renderBusinessHours();
+            this.renderLists();
         }
 
         // --- RENDERERS ---
@@ -323,6 +345,19 @@
             const container = this.shadowRoot.getElementById('variables-container');
             if(!container) return; 
             container.innerHTML = ''; 
+
+            if (this.loadStatus.vars === 'forbidden') {
+                container.innerHTML = `<div class="status-msg warning">You do not have permission to view Global Variables.</div>`;
+                return;
+            }
+            if (this.loadStatus.vars === 'not_found' || this.loadStatus.vars === 'empty') {
+                // Optional: Hide section entirely or show empty message
+                return; 
+            }
+            if (this.loadStatus.vars === 'error') {
+                container.innerHTML = `<div class="status-msg warning">Unable to load Global Variables.</div>`;
+                return;
+            }
 
             const vars = [...this.data.variables].sort((a, b) => a.name.localeCompare(b.name));
             const metrics = this.calculateLayoutMetrics(vars);
@@ -356,6 +391,15 @@
             if(!container) return;
             container.innerHTML = '';
 
+            if (this.loadStatus.bh === 'forbidden') {
+                container.innerHTML = `<div class="status-msg warning">You do not have permission to view Business Hours.</div>`;
+                return;
+            }
+            if (this.loadStatus.bh === 'error') {
+                container.innerHTML = `<div class="status-msg warning">Unable to load Business Hours.</div>`;
+                return;
+            }
+
             if (this.data.businessHours.length > 0) {
                 container.insertAdjacentHTML('beforeend', `<h3 class="category-header">Business Hours</h3>`);
                 const wrapper = document.createElement('div');
@@ -378,13 +422,27 @@
             hContainer.innerHTML = ''; 
             oContainer.innerHTML = '';
 
+            // Handle Empty/Permission States specifically for Lists
+            if (this.loadStatus.lists === 'forbidden') {
+                const msg = `<div class="status-msg info">You do not have permission to view Holiday/Override lists.</div>`;
+                hContainer.innerHTML = msg;
+                oContainer.innerHTML = msg;
+                return;
+            }
+            if (this.loadStatus.lists === 'not_found' || this.loadStatus.lists === 'empty') {
+                const msg = `<div class="status-msg info">No Holiday or Override lists are assigned to your profile.</div>`;
+                hContainer.innerHTML = msg;
+                oContainer.innerHTML = msg;
+                return;
+            }
+
             const hWrapper = document.createElement('div'); hWrapper.className = 'section-wrapper';
             const oWrapper = document.createElement('div'); oWrapper.className = 'section-wrapper';
 
+            // Populate both tabs with all lists (User can decide which is which based on naming)
             this.data.holidayLists.forEach(list => {
                 const events = this.listEditState[list.id] || [];
                 const isDirty = this.hasChanges[list.id];
-                // For now, add to BOTH tabs so user can see them everywhere
                 hWrapper.appendChild(this.buildListCard(list, events, isDirty));
                 oWrapper.appendChild(this.buildListCard(list, events, isDirty));
             });
@@ -429,12 +487,14 @@
             const card = document.createElement('div');
             card.className = 'bh-card';
             
+            // Dropdown Options
             let optionsHtml = '<option value="">-- No List Selected --</option>';
             this.data.holidayLists.forEach(l => {
                 const isSelected = (bh.holidayScheduleId === l.id); 
                 optionsHtml += `<option value="${l.id}" ${isSelected ? 'selected' : ''}>${this.escapeHtml(l.name)}</option>`;
             });
 
+            // Shifts
             const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
             const shortDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
             let daysHtml = '';
@@ -502,7 +562,7 @@
             return card;
         }
 
-        // --- HANDLERS ---
+        // --- HANDLERS (Business Hours) ---
 
         attachBusinessHoursListeners(root) {
             root.querySelectorAll('.add-shift-btn').forEach(b => b.addEventListener('click', e => this.openAddShiftUI(e.currentTarget.dataset.bh)));
