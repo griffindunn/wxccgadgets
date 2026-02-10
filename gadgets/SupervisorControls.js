@@ -1,10 +1,10 @@
 /* FILENAME: SupervisorControls.js
    DESCRIPTION: A Webex Contact Center gadget for Supervisors.
-   VERSION: v4.20-SeparatedLists (Separated Business Hours & Holiday List Management)
+   VERSION: v4.21-TabsAndDropdowns (Safe Loading, Tabs, & BH Dropdowns)
 */
 
 (function() {
-    const VERSION = "v4.20-SeparatedLists";
+    const VERSION = "v4.21-TabsAndDropdowns";
     
     // --- STYLING SECTION (CSS) ---
     const CSS_STYLES = `
@@ -17,7 +17,7 @@
             --border-color: #dcdcdc; --border-light: #eee; --border-accent: #00bceb;
             --color-primary: #00bceb; --color-primary-hover: #00a0c6;
             --color-success: #2fb16c; --color-danger: #dc3545;
-            --color-override: #f0ad4e;
+            --color-tab-active: #00bceb; --color-tab-inactive: #f4f4f4;
 
             /* DYNAMIC VARIABLES */
             --label-width: 180px;      
@@ -36,6 +36,7 @@
             --bg-edit-box: #2c3e50; --bg-new-area: #222;
             --text-main: #e0e0e0; --text-sub: #ccc; --text-desc: #aaa; --text-input: #fff;
             --border-color: #444; --border-light: #333;
+            --color-tab-inactive: #2c2c2c;
         }
 
         h3.category-header {
@@ -47,7 +48,7 @@
         #content { display: block; padding-bottom: 40px; }
         .section-wrapper { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
 
-        /* --- CARD STYLING (Shared) --- */
+        /* --- CARDS --- */
         .var-row, .bh-card, .list-card {
             background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;
             transition: box-shadow 0.2s; flex: 0 0 auto; 
@@ -56,10 +57,7 @@
         .var-row { padding: 16px; display: flex; align-items: flex-start; }
         .var-row:hover, .bh-card:hover, .list-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
         
-        .var-info { 
-            flex: 0 0 var(--label-width); margin-right: 20px; margin-top: 8px; 
-            overflow-wrap: break-word; 
-        }
+        .var-info { flex: 0 0 var(--label-width); margin-right: 20px; margin-top: 8px; overflow-wrap: break-word; }
         .var-name { font-weight: 600; color: var(--text-main); font-size: 0.95rem; margin-bottom: 4px; display: block; }
         .var-desc { font-size: 0.8rem; color: var(--text-desc); line-height: 1.4; }
         
@@ -80,6 +78,16 @@
         }
         .bh-title { font-size: 1rem; font-weight: 600; color: var(--text-main); }
         .bh-content { padding: 0; }
+
+        /* TABS */
+        .tabs-nav { display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 1px solid var(--border-color); }
+        .tab-btn {
+            background: var(--color-tab-inactive); border: none; padding: 10px 20px; cursor: pointer;
+            border-radius: 8px 8px 0 0; font-weight: 600; color: var(--text-sub);
+        }
+        .tab-btn.active { background: var(--color-primary); color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
 
         /* Generic Edit Areas */
         .new-item-area {
@@ -108,9 +116,6 @@
         }
         .new-item-area .shift-edit-box { margin-top: 0; background: var(--bg-card); }
         
-        .delete-confirm-view { text-align: center; padding: 20px 0; animation: fadeIn 0.2s ease-in; }
-
-        /* Form Elements */
         .edit-row { display: flex; gap: 15px; flex-wrap: wrap; }
         .form-group { display: flex; flex-direction: column; gap: 4px; }
         .form-label { font-size: 0.7rem; font-weight: 700; color: var(--text-sub); text-transform: uppercase; }
@@ -127,7 +132,6 @@
         .day-pill:hover { background: var(--border-light); }
         .day-pill.selected { background: var(--color-primary); color: white; border-color: var(--color-primary); }
 
-        /* Footer Association Dropdown */
         .bh-footer-select {
             padding: 15px 20px; background: var(--bg-new-area); border-top: 1px solid var(--border-color);
             display: flex; flex-direction: column; gap: 5px;
@@ -141,24 +145,17 @@
         .bh-save-bar.visible { display: block; animation: slideUp 0.3s ease-out; }
 
         @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
+        
         .btn {
             padding: 0 16px; height: 36px; border: none; border-radius: 18px;
             font-weight: 600; font-size: 13px; cursor: pointer; transition: 0.2s;
         }
         .btn-primary { background: var(--color-primary); color: white; }
-        .btn-primary:hover { background: var(--color-primary-hover); }
-        .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
         .btn-success { background: var(--color-success); color: white; }
-        .btn-success:hover { opacity: 0.9; }
         .btn-black { background: #222; color: white; }
-        .btn-black:hover { background: #000; }
-        @media (prefers-color-scheme: dark) { .btn-black { background: #444; } .btn-black:hover { background: #555; } }
+        @media (prefers-color-scheme: dark) { .btn-black { background: #444; } }
         .btn-secondary { background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-main); }
-        .btn-secondary:hover { background: var(--border-light); }
         .btn-danger { background: var(--color-danger); color: white; }
-        .btn-danger:hover { opacity: 0.9; }
 
         .footer-version { position: fixed; bottom: 8px; left: 15px; font-size: 11px; color: var(--text-desc); pointer-events: none; }
         #toast {
@@ -168,9 +165,8 @@
             opacity: 0; transition: opacity 0.3s;
         }
         #toast.show { visibility: visible; opacity: 1; bottom: 50px; }
-        #toast.success { background-color: var(--color-success); }
-        #toast.error { background-color: var(--color-danger); }
         .loading { color: var(--text-desc); font-style: italic; display: flex; align-items: center; gap: 8px; }
+        .error-msg { color: var(--color-danger); padding: 10px; border: 1px solid var(--color-danger); border-radius: 4px; }
     `;
 
     // --- HTML TEMPLATE ---
@@ -181,7 +177,19 @@
           <div id="content">
               <div id="variables-container"></div>
               <div id="bh-container" style="margin-top: 30px;"></div>
-              <div id="holidays-container" style="margin-top: 30px;"></div>
+              
+              <h3 class="category-header">Lists Management</h3>
+              <div class="tabs-nav">
+                  <button class="tab-btn active" data-tab="holidays">Holiday Lists</button>
+                  <button class="tab-btn" data-tab="overrides">Override Lists</button>
+              </div>
+              
+              <div id="tab-holidays" class="tab-content active">
+                  <div id="holidays-list-container"></div>
+              </div>
+              <div id="tab-overrides" class="tab-content">
+                  <div id="overrides-list-container"></div>
+              </div>
           </div>
       </div>
       <div id="toast">Notification</div>
@@ -205,6 +213,24 @@
             if (this.getAttribute('is-dark-mode') === 'true' || this.getAttribute('dark-mode') === 'true') {
                 this.setDarkTheme(true);
             }
+            this.attachTabListeners();
+        }
+
+        attachTabListeners() {
+            const tabs = this.shadowRoot.querySelectorAll('.tab-btn');
+            tabs.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    // Reset active states
+                    this.shadowRoot.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    this.shadowRoot.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    
+                    // Activate clicked
+                    e.target.classList.add('active');
+                    const tabId = e.target.dataset.tab;
+                    const contentId = tabId === 'holidays' ? 'tab-holidays' : 'tab-overrides';
+                    this.shadowRoot.getElementById(contentId).classList.add('active');
+                });
+            });
         }
 
         static get observedAttributes() { return ['token', 'org-id', 'data-center', 'is-dark-mode', 'dark-mode']; }
@@ -242,30 +268,25 @@
             return map[cleanDc] || map['us1'];
         }
 
+        // --- SAFE DATA LOADING ---
         async loadAllData() {
             const contentDiv = this.shadowRoot.getElementById('content');
-            if(!this.data.variables.length) {
-                contentDiv.innerHTML = '<div class="loading"><span>Loading Data...</span></div>';
-            }
+            
+            // Independent promises so one failure doesn't kill everything
+            const pVars = this.loadVariables().catch(e => { console.error("Vars Fail", e); return "FAIL"; });
+            const pBh = this.loadBusinessHours().catch(e => { console.error("BH Fail", e); return "FAIL"; });
+            const pLists = this.loadHolidayLists().catch(e => { console.error("Lists Fail", e); return "FAIL"; });
 
-            try {
-                await Promise.all([this.loadVariables(), this.loadBusinessHours(), this.loadHolidayLists()]);
-                contentDiv.innerHTML = `
-                    <div id="variables-container"></div>
-                    <div id="bh-container" style="margin-top: 30px;"></div>
-                    <div id="holidays-container" style="margin-top: 30px;"></div>
-                `;
-                this.render();
-            } catch (err) {
-                console.error('[SupervisorControls] Load failed:', err);
-                contentDiv.innerHTML = `<div style="color:var(--color-danger)">Error loading data: ${err.message}</div>`;
-            }
+            await Promise.all([pVars, pBh, pLists]);
+
+            // Render whatever succeeded
+            this.render();
         }
 
         async loadVariables() {
             const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/cad-variable?page=0&pageSize=100`;
             const res = await fetch(url, { headers: { 'Authorization': `Bearer ${this.ctx.token}` } });
-            if (!res.ok) throw new Error(`Variables API Error ${res.status}`);
+            if (!res.ok) throw new Error("API Error");
             const json = await res.json();
             this.data.variables = (json.data || []).filter(v => v.active !== false);
         }
@@ -273,7 +294,7 @@
         async loadBusinessHours() {
             const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/business-hours?page=0&pageSize=100`;
             const res = await fetch(url, { headers: { 'Authorization': `Bearer ${this.ctx.token}` } });
-            if (!res.ok) throw new Error(`Business Hours API Error ${res.status}`);
+            if (!res.ok) throw new Error("API Error");
             const json = await res.json();
             this.data.businessHours = json.data || [];
             
@@ -286,28 +307,24 @@
         }
 
         async loadHolidayLists() {
-            // Note: Endpoint may vary. Using standard pattern /v2/holiday-schedules
+            // Using generic holiday-schedules endpoint. If this fails, the lists tab will show error.
             const url = `${this.ctx.baseUrl}/organization/${this.ctx.orgId}/v2/holiday-schedules?page=0&pageSize=100`;
             const res = await fetch(url, { headers: { 'Authorization': `Bearer ${this.ctx.token}` } });
-            if (!res.ok) {
-                console.warn("Holiday Lists API failed or not available");
-                this.data.holidayLists = []; 
-                return;
-            }
+            if (!res.ok) throw new Error("API Error");
             const json = await res.json();
             this.data.holidayLists = json.data || [];
             
             this.listEditState = {};
             this.data.holidayLists.forEach(l => {
-                this.listEditState[l.id] = JSON.parse(JSON.stringify(l.events || [])); // 'events' is standard for holiday lists
+                this.listEditState[l.id] = JSON.parse(JSON.stringify(l.events || []));
                 this.hasChanges[l.id] = false;
             });
         }
 
         render() {
-            try { this.renderVariables(); } catch (e) { console.error("Var Render Error", e); }
-            try { this.renderBusinessHours(); } catch (e) { console.error("BH Render Error", e); }
-            try { this.renderHolidayLists(); } catch (e) { console.error("Holiday Render Error", e); }
+            try { this.renderVariables(); } catch (e) {}
+            try { this.renderBusinessHours(); } catch (e) {}
+            try { this.renderLists(); } catch (e) {}
         }
 
         // --- RENDERERS ---
@@ -316,6 +333,8 @@
             const container = this.shadowRoot.getElementById('variables-container');
             if(!container) return; 
             container.innerHTML = ''; 
+
+            if (this.data.variables.length === 0) return; // Silent return if empty
 
             const vars = [...this.data.variables].sort((a, b) => a.name.localeCompare(b.name));
             const metrics = this.calculateLayoutMetrics(vars);
@@ -364,24 +383,41 @@
             this.attachBusinessHoursListeners(container);
         }
 
-        renderHolidayLists() {
-            const container = this.shadowRoot.getElementById('holidays-container');
-            if(!container) return;
-            container.innerHTML = '';
+        renderLists() {
+            const hContainer = this.shadowRoot.getElementById('holidays-list-container');
+            const oContainer = this.shadowRoot.getElementById('overrides-list-container');
+            
+            hContainer.innerHTML = ''; 
+            oContainer.innerHTML = '';
 
-            if (this.data.holidayLists.length > 0) {
-                container.insertAdjacentHTML('beforeend', `<h3 class="category-header">Override / Holiday Lists</h3>`);
-                const wrapper = document.createElement('div');
-                wrapper.className = 'section-wrapper';
-                
-                this.data.holidayLists.forEach(list => {
-                    const events = this.listEditState[list.id] || [];
-                    const isDirty = this.hasChanges[list.id];
-                    wrapper.appendChild(this.buildHolidayListCard(list, events, isDirty));
-                });
-                container.appendChild(wrapper);
+            if (!this.data.holidayLists || this.data.holidayLists.length === 0) {
+                hContainer.innerHTML = '<div class="shift-empty">No lists found.</div>';
+                oContainer.innerHTML = '<div class="shift-empty">No lists found.</div>';
+                return;
             }
-            this.attachHolidayListeners(container);
+
+            const hWrapper = document.createElement('div'); hWrapper.className = 'section-wrapper';
+            const oWrapper = document.createElement('div'); oWrapper.className = 'section-wrapper';
+
+            this.data.holidayLists.forEach(list => {
+                const events = this.listEditState[list.id] || [];
+                const isDirty = this.hasChanges[list.id];
+                const card = this.buildListCard(list, events, isDirty);
+                
+                // Naive sort: If name contains "override", put in overrides tab, else holidays
+                if (list.name.toLowerCase().includes('override')) {
+                    oWrapper.appendChild(card);
+                } else {
+                    hWrapper.appendChild(card);
+                }
+            });
+
+            hContainer.appendChild(hWrapper);
+            oContainer.appendChild(oWrapper);
+
+            // Attach listeners to both containers
+            this.attachListListeners(hContainer);
+            this.attachListListeners(oContainer);
         }
 
         // --- BUILDERS ---
@@ -417,15 +453,14 @@
             const card = document.createElement('div');
             card.className = 'bh-card';
             
-            // Build Dropdown Options
-            let optionsHtml = '<option value="">-- No Override List --</option>';
+            // Dropdown Options
+            let optionsHtml = '<option value="">-- No List Selected --</option>';
             this.data.holidayLists.forEach(l => {
-                // Check if this list is currently assigned
                 const isSelected = (bh.holidayScheduleId === l.id); 
                 optionsHtml += `<option value="${l.id}" ${isSelected ? 'selected' : ''}>${this.escapeHtml(l.name)}</option>`;
             });
 
-            // Build Shifts
+            // Shifts
             const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
             const shortDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
             let daysHtml = '';
@@ -468,7 +503,7 @@
             return card;
         }
 
-        buildHolidayListCard(list, events, isDirty) {
+        buildListCard(list, events, isDirty) {
             const card = document.createElement('div');
             card.className = 'list-card';
             
@@ -502,7 +537,6 @@
             root.querySelectorAll('.save-bh-btn').forEach(b => 
                 b.addEventListener('click', e => this.handleSaveBusinessHours(e.currentTarget.dataset.bh, e.currentTarget))
             );
-            // Detect Dropdown Changes
             root.querySelectorAll('.bh-holiday-select').forEach(s => {
                 s.addEventListener('change', e => {
                     const bhId = e.currentTarget.dataset.bh;
@@ -510,7 +544,6 @@
                     this.renderBusinessHours();
                 });
             });
-            // Row Clicks
             root.querySelectorAll('.shift-row').forEach(row => {
                 row.addEventListener('click', e => {
                     if(row.nextElementSibling && row.nextElementSibling.classList.contains('shift-edit-box')) return;
@@ -519,7 +552,6 @@
             });
         }
 
-        // (Reusing robust logic from v4.18 for Shift UI)
         openAddShiftUI(bhId) {
             const container = this.shadowRoot.getElementById(`new-shift-container-${bhId}`);
             if (!container) return;
@@ -581,9 +613,9 @@
                 </div>`;
         }
 
-        // --- HANDLERS (Holiday Lists) ---
+        // --- HANDLERS (Lists) ---
 
-        attachHolidayListeners(root) {
+        attachListListeners(root) {
             root.querySelectorAll('.add-date-btn').forEach(b => 
                 b.addEventListener('click', e => this.openAddDateUI(e.currentTarget.dataset.list))
             );
@@ -624,7 +656,7 @@
             if(idx === -1) editBox.querySelector('.cancel-edit-btn').addEventListener('click', () => { if(!targetElement.classList.contains('shift-edit-box')) targetElement.innerHTML = ''; targetElement.classList.remove('active'); });
 
             const delBtn = editBox.querySelector('.delete-shift-btn');
-            if(delBtn) delBtn.addEventListener('click', () => { this.listEditState[listId].splice(idx, 1); this.hasChanges[listId] = true; this.renderHolidayLists(); });
+            if(delBtn) delBtn.addEventListener('click', () => { this.listEditState[listId].splice(idx, 1); this.hasChanges[listId] = true; this.renderLists(); });
 
             editBox.querySelector('.confirm-edit-btn').addEventListener('click', () => {
                 const name = editBox.querySelector('.edit-name').value.trim();
@@ -636,7 +668,7 @@
                 const newEvt = { name, startDate: start, endDate: end };
                 if(idx === -1) this.listEditState[listId].push(newEvt); else this.listEditState[listId][idx] = newEvt;
                 this.hasChanges[listId] = true;
-                this.renderHolidayLists();
+                this.renderLists();
             });
         }
 
@@ -656,10 +688,8 @@
         async handleSaveBusinessHours(bhId, btnElement) {
             btnElement.innerText = "Saving..."; btnElement.disabled = true;
             try {
-                // Find selected holiday list from dropdown
                 const select = this.shadowRoot.querySelector(`.bh-holiday-select[data-bh="${bhId}"]`);
                 const holidayId = select ? select.value : null;
-
                 const originalBh = this.data.businessHours.find(b => b.id === bhId);
                 const payload = { ...originalBh, workingHours: this.editState[bhId], holidayScheduleId: holidayId };
 
@@ -670,8 +700,6 @@
                 
                 this.hasChanges[bhId] = false;
                 this.showNotification("Saved Business Hour", "success");
-                
-                // Update local model so dropdown state persists
                 originalBh.holidayScheduleId = holidayId;
                 this.renderBusinessHours();
             } catch (e) {
@@ -692,8 +720,8 @@
                 if(!res.ok) throw new Error("API Save Error");
                 
                 this.hasChanges[listId] = false;
-                this.showNotification("Saved Holiday List", "success");
-                this.renderHolidayLists();
+                this.showNotification("Saved List", "success");
+                this.renderLists();
             } catch (e) {
                 this.showNotification("Save Failed", "error");
                 btnElement.innerText = "Save List"; btnElement.disabled = false;
