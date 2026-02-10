@@ -1,10 +1,10 @@
 /* FILENAME: SupervisorControls.js
    DESCRIPTION: A Webex Contact Center gadget for Supervisors.
-   VERSION: v4.24-AsyncLoader (Independent, Sequential Rendering)
+   VERSION: v4.25-ScopeFix (Fixed 'this' context error)
 */
 
 (function() {
-    const VERSION = "v4.24-AsyncLoader";
+    const VERSION = "v4.25-ScopeFix";
     
     const CSS_STYLES = `
         :host {
@@ -180,6 +180,10 @@
             this.editState = {}; 
             this.listEditState = {};
             this.hasChanges = {};
+            
+            // Bind methods to 'this' context
+            this.escapeHtml = this.escapeHtml.bind(this);
+            this.formatTime = this.formatTime.bind(this);
         }
 
         connectedCallback() {
@@ -197,7 +201,6 @@
                     this.shadowRoot.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                     e.target.classList.add('active');
                     const tabId = e.target.dataset.tab;
-                    // Simply toggle visibility of containers inside the rendered list section
                     const hCont = this.shadowRoot.getElementById('tab-holidays');
                     const oCont = this.shadowRoot.getElementById('tab-overrides');
                     if(hCont && oCont) {
@@ -222,7 +225,6 @@
                 this.setDarkTheme(isDark);
             }
             if (this.ctx.token && this.ctx.orgId && this.ctx.baseUrl) {
-                // START LOADING IMMEDIATELY
                 this.startLoadingProcess();
             }
         }
@@ -245,7 +247,6 @@
         }
 
         startLoadingProcess() {
-            // FIRE AND FORGET - Do not use Promise.all. Allow each to render when ready.
             this.loadAndRenderVariables();
             this.loadAndRenderBusinessHours();
             this.loadAndRenderLists();
@@ -267,7 +268,6 @@
                 const json = await res.json();
                 this.data.variables = (json.data || []).filter(v => v.active !== false);
                 
-                // RENDER VARIABLES
                 container.innerHTML = `<div id="variables-container"></div>`;
                 const listContainer = this.shadowRoot.getElementById('variables-container');
                 
@@ -325,7 +325,6 @@
                     this.hasChanges[bh.id] = false;
                 });
 
-                // RENDER BH
                 container.innerHTML = `<div id="bh-container"></div>`;
                 const listContainer = this.shadowRoot.getElementById('bh-container');
 
@@ -361,7 +360,6 @@
                     container.innerHTML = `<div class="status-msg info">You do not have permission to view Holiday/Override lists.</div>`;
                     return;
                 }
-                // TREAT 404 AS EMPTY LIST, NOT ERROR
                 if (res.status === 404) {
                     this.data.holidayLists = [];
                 } else {
@@ -376,7 +374,6 @@
                     this.hasChanges[l.id] = false;
                 });
 
-                // RENDER LISTS
                 container.innerHTML = `
                     <div id="tab-holidays" class="tab-content active"><div id="holidays-list-container"></div></div>
                     <div id="tab-overrides" class="tab-content"><div id="overrides-list-container"></div></div>
@@ -406,10 +403,7 @@
                     this.attachListListeners(oContainer);
                 }
 
-                // If BH loaded first, they might need a refresh to populate dropdowns with these lists
-                // We re-render BH if needed (optional optimization)
                 if(this.data.businessHours.length > 0) {
-                   // This ensures dropdowns get populated if Lists load AFTER business hours
                    this.loadAndRenderBusinessHours(); 
                 }
 
@@ -418,8 +412,33 @@
             }
         }
 
-        // --- BUILDERS ---
+        // --- UTILS ---
+        escapeHtml(str) {
+            if(!str) return '';
+            return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
 
+        formatTime(t) {
+            if (!t) return '';
+            const [h, m] = t.split(':');
+            const hour = parseInt(h, 10);
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            const hour12 = hour % 12 || 12;
+            return `${hour12}:${m} ${ampm}`;
+        }
+
+        calculateLayoutMetrics(vars) { 
+            try {
+                if(!vars.length) return {labelWidth:150, cardWidth:450};
+                const s=document.createElement('span'); s.style.visibility='hidden'; s.style.position='absolute'; s.style.font='600 0.95rem "CiscoSans"';
+                this.shadowRoot.appendChild(s);
+                let w=100; vars.forEach(v=>{ s.innerText=v.name; if(s.offsetWidth>w)w=s.offsetWidth; });
+                this.shadowRoot.removeChild(s);
+                return {labelWidth:w+20, cardWidth:w+360};
+            } catch(e) { return {labelWidth:150, cardWidth:450}; }
+        }
+
+        // --- BUILDERS ---
         buildVariableCard(v) {
             const safeName = this.escapeHtml(v.name);
             const safeVal = this.escapeHtml(v.defaultValue || '');
@@ -451,14 +470,12 @@
             const card = document.createElement('div');
             card.className = 'bh-card';
             
-            // Dropdown Options
             let optionsHtml = '<option value="">-- No List Selected --</option>';
             this.data.holidayLists.forEach(l => {
                 const isSelected = (bh.holidayScheduleId === l.id); 
                 optionsHtml += `<option value="${l.id}" ${isSelected ? 'selected' : ''}>${this.escapeHtml(l.name)}</option>`;
             });
 
-            // Shifts
             const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
             const shortDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
             let daysHtml = '';
@@ -526,8 +543,6 @@
             return card;
         }
 
-        // --- HANDLERS (Business Hours) ---
-
         attachBusinessHoursListeners(root) {
             root.querySelectorAll('.add-shift-btn').forEach(b => b.addEventListener('click', e => this.openAddShiftUI(e.currentTarget.dataset.bh)));
             root.querySelectorAll('.save-bh-btn').forEach(b => b.addEventListener('click', e => this.handleSaveBusinessHours(e.currentTarget.dataset.bh, e.currentTarget)));
@@ -583,20 +598,6 @@
                 this.hasChanges[bhId] = true;
                 this.loadAndRenderBusinessHours();
             });
-        }
-
-        getShiftEditHTML(shift, isNew) {
-            const allDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-            const safeName = this.escapeHtml(shift.name || '');
-            const delHtml = isNew ? '' : '<button class="btn btn-danger delete-shift-btn">Delete</button>';
-            const pills = allDays.map(d => `<div class="day-pill ${shift.days.includes(d)?'selected':''}" data-day="${d}">${shift.days.includes(d)?'&#10003;':''} ${d}</div>`).join('');
-            return `
-                <div class="shift-edit-box">
-                    <div class="edit-row"><div class="form-group"><span class="form-label">Name</span><input class="edit-name" value="${safeName}"></div>
-                    <div class="form-group"><span class="form-label">Time</span><div style="display:flex;gap:5px;"><input type="time" class="edit-start" value="${shift.startTime}"><input type="time" class="edit-end" value="${shift.endTime}"></div></div></div>
-                    <div class="form-group" style="margin-top:10px;"><span class="form-label">Days</span><div class="day-pills">${pills}</div></div>
-                    <div style="display:flex;justify-content:space-between;margin-top:15px;"><div>${delHtml}</div><div style="display:flex;gap:10px;"><button class="btn btn-secondary cancel-edit-btn">Cancel</button><button class="btn btn-primary confirm-edit-btn">Done</button></div></div>
-                </div>`;
         }
 
         attachListListeners(root) {
@@ -703,19 +704,6 @@
                 btnElement.innerText = "Save List"; btnElement.disabled = false;
             }
         }
-
-        calculateLayoutMetrics(vars) { 
-            try {
-                if(!vars.length) return {labelWidth:150, cardWidth:450};
-                const s=document.createElement('span'); s.style.visibility='hidden'; s.style.position='absolute'; s.style.font='600 0.95rem "CiscoSans"';
-                this.shadowRoot.appendChild(s);
-                let w=100; vars.forEach(v=>{ s.innerText=v.name; if(s.offsetWidth>w)w=s.offsetWidth; });
-                this.shadowRoot.removeChild(s);
-                return {labelWidth:w+20, cardWidth:w+360};
-            } catch(e) { return {labelWidth:150, cardWidth:450}; }
-        }
-
-        formatTime(t) { if(!t) return ''; const [h,m] = t.split(':'); const hr = parseInt(h,10); return `${hr%12||12}:${m} ${hr>=12?'PM':'AM'}`; }
         
         async handleSaveVariable(varId, btn) {
             const input = this.shadowRoot.getElementById(`input-${varId}`);
