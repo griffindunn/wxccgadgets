@@ -1,10 +1,10 @@
 /* FILENAME: SupervisorControls.js
    DESCRIPTION: A Webex Contact Center gadget for Supervisors.
-   VERSION: v4.16-FinalFixed (Restored Event Listeners & Robust Click Handling)
+   VERSION: v4.17-Robust (Fixed Edit Logic Crash & Event Listeners)
 */
 
 (function() {
-    const VERSION = "v4.16-FinalFixed";
+    const VERSION = "v4.17-Robust";
     
     // --- STYLING SECTION (CSS) ---
     const CSS_STYLES = `
@@ -197,7 +197,6 @@
         }
 
         connectedCallback() {
-            // Check if attribute already exists on load
             if (this.getAttribute('is-dark-mode') === 'true' || this.getAttribute('dark-mode') === 'true') {
                 this.setDarkTheme(true);
             }
@@ -212,13 +211,10 @@
                 this.ctx.region = newValue;
                 this.ctx.baseUrl = this.resolveApiUrl(newValue);
             }
-            
-            // --- DARK MODE SYNC ---
             if (name === 'is-dark-mode' || name === 'dark-mode') {
                 const isDark = (newValue === 'true' || newValue === 'dark' || newValue === true);
                 this.setDarkTheme(isDark);
             }
-            
             if (this.ctx.token && this.ctx.orgId && this.ctx.baseUrl) {
                 this.loadAllData();
             }
@@ -307,7 +303,7 @@
                 return a.name.localeCompare(b.name);
             });
 
-            // --- DYNAMIC LAYOUT CALCULATION ---
+            // Dynamic Layout Calculation
             const metrics = this.calculateLayoutMetrics(vars);
             this.style.setProperty('--label-width', `${metrics.labelWidth}px`);
             this.style.setProperty('--card-min-width', `${metrics.cardWidth}px`);
@@ -329,7 +325,7 @@
             });
             container.appendChild(currentWrapper);
 
-            // Robust click handling
+            // Click Handlers
             container.querySelectorAll('.save-var-btn').forEach(b => 
                 b.addEventListener('click', e => this.handleSaveVariable(e.currentTarget.dataset.id, e.currentTarget))
             );
@@ -377,7 +373,7 @@
                 });
                 container.appendChild(wrapper);
             }
-            // CRITICAL FIX: Restore Event Listeners so buttons work!
+            // CRITICAL: Re-attach listeners to the new DOM elements
             this.attachBusinessHoursListeners(container);
         }
 
@@ -468,7 +464,6 @@
         }
 
         attachBusinessHoursListeners(root) {
-            // FIX: Use currentTarget to ensure we catch the button click specifically
             root.querySelectorAll('.add-shift-btn').forEach(b => 
                 b.addEventListener('click', e => this.openAddShiftUI(e.currentTarget.dataset.bh))
             );
@@ -491,6 +486,7 @@
             container.innerHTML = this.getShiftEditHTML(defaultShift, true);
             container.classList.add('active');
 
+            // FIX: Pass the container directly to find the box inside it
             this.attachShiftEditHandlers(container, bhId, -1);
         }
 
@@ -507,11 +503,18 @@
                 rowEl.style.display = 'grid';
             }, { once: true });
 
+            // FIX: Pass the editBox element directly
             this.attachShiftEditHandlers(editBox, bhId, idx, rowEl);
         }
 
-        attachShiftEditHandlers(container, bhId, idx, rowEl = null) {
-            const editBox = container.querySelector('.shift-edit-box');
+        // REFACTORED: Now accepts either a container (searching children) or the box itself
+        attachShiftEditHandlers(targetElement, bhId, idx, rowEl = null) {
+            // Determine if we were passed the box itself or a wrapper
+            const editBox = targetElement.classList.contains('shift-edit-box') 
+                ? targetElement 
+                : targetElement.querySelector('.shift-edit-box');
+
+            if (!editBox) { console.error("Critical: Edit Box not found"); return; }
 
             editBox.querySelectorAll('.day-pill').forEach(t => {
                 t.addEventListener('click', (e) => {
@@ -526,8 +529,11 @@
 
             if(idx === -1) {
                 editBox.querySelector('.cancel-edit-btn').addEventListener('click', () => {
-                    container.innerHTML = '';
-                    container.classList.remove('active');
+                    // If creating new, we clear the parent container
+                    if (!targetElement.classList.contains('shift-edit-box')) {
+                        targetElement.innerHTML = '';
+                        targetElement.classList.remove('active');
+                    }
                 });
             }
 
